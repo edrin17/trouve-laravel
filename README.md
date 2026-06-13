@@ -1,58 +1,74 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Trouve — Backend Laravel
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Backend de l'application **Trouve** (localisation d'objets dans la maison),
+migration de la v1 Python/GTK4 ([dépôt trouve](https://github.com/edrin17/trouve))
+vers une architecture web multi-plateforme.
 
-## About Laravel
+- **Stack :** Laravel 12 · PHP 8.5 · SQLite
+- **Environnement :** 100 % conteneurisé via [Laravel Sail](https://laravel.com/docs/sail) (Docker)
+- **Aucune dépendance sur l'OS hôte** hormis Docker.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+---
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Prérequis
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+Une seule chose à installer sur la machine : **Docker** (Engine + plugin Compose).
 
-## Learning Laravel
+> Sur Ubuntu / Linux Mint, suivre la procédure officielle :
+> <https://docs.docker.com/engine/install/ubuntu/>
+> puis `sudo usermod -aG docker $USER` et redémarrer la session.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+---
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+## Installation (machine vierge)
 
 ```bash
-composer require laravel/boost --dev
+# 1. Cloner le dépôt
+git clone https://github.com/edrin17/trouve-laravel.git
+cd trouve-laravel
 
-php artisan boost:install
+# 2. Installer les dépendances PHP (conteneur jetable, rien sur l'OS)
+docker run --rm -v "$(pwd)":/app -w /app composer:2 install
+
+# 3. Créer le fichier d'environnement
+cp .env.example .env
+docker run --rm -v "$(pwd)":/app -w /app composer:2 php artisan key:generate
+
+# 4. Démarrer l'environnement (l'image se construit au premier lancement)
+./vendor/bin/sail up -d
+
+# 5. Préparer la base SQLite
+touch database/database.sqlite
+./vendor/bin/sail artisan migrate
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+L'application est disponible sur <http://localhost>.
 
-## Contributing
+---
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+## Commandes au quotidien
 
-## Code of Conduct
+```bash
+./vendor/bin/sail up -d        # démarrer (détaché)
+./vendor/bin/sail down         # arrêter (libère la RAM)
+./vendor/bin/sail artisan …    # commandes Artisan
+./vendor/bin/sail composer …   # Composer
+./vendor/bin/sail php …        # PHP
+./vendor/bin/sail test         # tests
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+> Astuce : alias `sail` dans `~/.bashrc`
+> ```bash
+> alias sail='sh $([ -f sail ] && echo sail || echo vendor/bin/sail)'
+> ```
 
-## Security Vulnerabilities
+---
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+## Notes
 
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+- **`.env`** et **`database/database.sqlite`** ne sont pas versionnés (config et
+  données locales). Ils sont recréés par les étapes d'installation ci-dessus.
+- La base SQLite repart **vide** sur une nouvelle machine ; copier le fichier
+  `database/database.sqlite` manuellement pour transférer des données.
+- Le `compose.yaml` est volontairement minimal (pas de MySQL / Redis) :
+  SQLite suffit pour les 3 utilisateurs visés.
