@@ -2,6 +2,7 @@
 
 use App\Models\House;
 use App\Models\Item;
+use App\Services\ItemService;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -44,10 +45,45 @@ new class extends Component
     {
         unset($this->maisons, $this->resultats);
     }
+
+    /**
+     * Déplace un item (drag & drop) vers une cible "house:ID" ou "item:ID".
+     * Ignore silencieusement les déplacements invalides (anti-cycle, cible
+     * non-conteneur, drop sur soi-même).
+     */
+    public function deplacerVers(int $itemId, string $cible): void
+    {
+        $item = Item::find($itemId);
+        if (!$item) {
+            return;
+        }
+        [$type, $cibleId] = array_pad(explode(':', $cible), 2, null);
+        $cibleId = (int) $cibleId;
+        $service = new ItemService();
+
+        if ($type === 'house') {
+            $service->deplacerVersMaison($item, $cibleId, null);
+        } elseif ($type === 'item') {
+            $dest = Item::find($cibleId);
+            // garde-fous : cible existante, conteneur, pas dans le sous-arbre, pas le parent actuel
+            if (!$dest || !$dest->is_container
+                || $service->estDescendant($item, $dest)
+                || $item->parent_id === $dest->id) {
+                return;
+            }
+            if ($dest->house_id === $item->house_id) {
+                $service->deplacer($item, $dest->id);
+            } else {
+                $service->deplacerVersMaison($item, $dest->house_id, $dest->id);
+            }
+        }
+
+        unset($this->maisons, $this->resultats);
+    }
 };
 ?>
 
-<div>
+<div x-data="{ draggedId: null }">
     <header class="app-bar">
         <h1>Trouve — Inventaire</h1>
     </header>
@@ -73,9 +109,15 @@ new class extends Component
         </ul>
     @else
         @foreach ($this->maisons as $maison)
-            <section style="margin-bottom:1.5rem;">
+            <section style="margin-bottom:1.5rem;"
+                     x-data="{ survol: false }"
+                     @dragover.prevent="survol = true"
+                     @dragleave="survol = false"
+                     @drop.prevent="survol = false; if (draggedId) $wire.deplacerVers(draggedId, 'house:{{ $maison->id }}')"
+                     :style="survol ? 'margin-bottom:1.5rem;outline:2px dashed #3584e4;outline-offset:3px;border-radius:6px;' : 'margin-bottom:1.5rem;'">
                 <h2 style="font-size:1rem;border-bottom:2px solid #3584e4;padding-bottom:.25rem;display:flex;align-items:center;gap:.5rem;">
                     🏠 {{ $maison->name }}
+                    <span style="font-size:.7rem;color:#5e5c64;font-weight:400;">(déposer ici = racine)</span>
                     <button type="button"
                             wire:click="$dispatch('item-creer', { houseId: {{ $maison->id }} })"
                             title="Ajouter un objet à la racine"

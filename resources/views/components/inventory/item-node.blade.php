@@ -1,7 +1,19 @@
 @props(['item'])
 
 <li style="margin:.15rem 0;">
-    <div style="padding:.3rem .5rem;background:#fff;border:1px solid #e8e8e8;border-radius:6px;display:flex;align-items:center;gap:.4rem;" wire:key="item-{{ $item->id }}">
+    <div wire:key="item-{{ $item->id }}"
+         x-data="{ survol: false }"
+         draggable="true"
+         @dragstart="draggedId = {{ $item->id }}; $event.dataTransfer.effectAllowed = 'move'"
+         @dragend="draggedId = null"
+         @if ($item->is_container)
+             @dragover.prevent="survol = (draggedId && draggedId !== {{ $item->id }})"
+             @dragleave="survol = false"
+             @drop.prevent.stop="survol = false; if (draggedId && draggedId !== {{ $item->id }}) $wire.deplacerVers(draggedId, 'item:{{ $item->id }}')"
+         @endif
+         :style="survol
+            ? 'padding:.3rem .5rem;background:#e8f0fe;border:1px solid #3584e4;border-radius:6px;display:flex;align-items:center;gap:.4rem;cursor:grab;'
+            : 'padding:.3rem .5rem;background:#fff;border:1px solid #e8e8e8;border-radius:6px;display:flex;align-items:center;gap:.4rem;cursor:grab;'">
         <span>{{ $item->is_container ? '📦' : '•' }}</span>
         <span style="font-weight:{{ $item->is_container ? '600' : '400' }};">{{ $item->name }}</span>
 
