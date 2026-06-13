@@ -156,6 +156,9 @@ new class extends Component
                 wire:click="basculerSelection"
                 style="margin-left:auto;border:1px solid #fff;border-radius:6px;padding:.2rem .6rem;cursor:pointer;font-size:.9rem;{{ $modeSelection ? 'background:#fff;color:#3584e4;' : 'background:transparent;color:#fff;' }}">{{ $modeSelection ? '✓ Sélection' : '☑️ Sélectionner' }}</button>
         <button type="button"
+                wire:click="$dispatch('tags-gerer')"
+                style="border:1px solid #fff;background:transparent;color:#fff;border-radius:6px;padding:.2rem .6rem;cursor:pointer;font-size:.9rem;">🏷️ Gérer les tags</button>
+        <button type="button"
                 wire:click="$dispatch('maison-creer')"
                 style="border:1px solid #fff;background:transparent;color:#fff;border-radius:6px;padding:.2rem .6rem;cursor:pointer;font-size:.9rem;">+ Nouvelle maison</button>
     </header>
@@ -239,4 +242,5 @@ new class extends Component
     <livewire:inventory.item-form />
     <livewire:inventory.item-move />
     <livewire:inventory.item-tag-bulk />
+    <livewire:inventory.tag-manager />
 </div>

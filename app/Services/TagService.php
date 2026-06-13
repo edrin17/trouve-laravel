@@ -60,4 +60,45 @@ class TagService
     {
         return Tag::withCount('items')->orderBy('name')->get();
     }
+
+    /**
+     * Renomme un tag du vocabulaire (portage de renommer_tag v1, avec fusion).
+     *
+     * Le nom est normalisé (trim + minuscule). Si un autre tag porte déjà ce
+     * nom, les deux sont fusionnés : les items du tag renommé sont rattachés au
+     * tag cible, puis le tag source est supprimé. Sinon simple renommage.
+     */
+    public function renommer(int $tagId, string $nouveauNom): void
+    {
+        $nouveauNom = trim(mb_strtolower($nouveauNom));
+        if ($nouveauNom === '') {
+            return;
+        }
+
+        DB::transaction(function () use ($tagId, $nouveauNom) {
+            $tag = Tag::find($tagId);
+            if (!$tag || $tag->name === $nouveauNom) {
+                return;
+            }
+
+            $cible = Tag::where('name', $nouveauNom)->first();
+            if ($cible) {
+                // Fusion : transférer les items puis supprimer le tag source
+                $itemIds = $tag->items()->pluck('items.id')->all();
+                $cible->items()->syncWithoutDetaching($itemIds);
+                $tag->delete();
+            } else {
+                $tag->update(['name' => $nouveauNom]);
+            }
+        });
+    }
+
+    /**
+     * Supprime un tag du vocabulaire (portage de supprimer_tag v1).
+     * Les associations pivot partent en cascade (FK).
+     */
+    public function supprimerDuVocabulaire(int $tagId): void
+    {
+        Tag::whereKey($tagId)->delete();
+    }
 }

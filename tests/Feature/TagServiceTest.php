@@ -103,4 +103,54 @@ class TagServiceTest extends TestCase
         $this->assertSame(2, $vocab->first()->items_count);
         $this->assertSame(0, $vocab->last()->items_count);
     }
+
+    public function test_renomme_un_tag(): void
+    {
+        $tag = Tag::factory()->create(['name' => 'ancien']);
+
+        $this->service->renommer($tag->id, 'NOUVEAU');
+
+        $this->assertSame('nouveau', $tag->fresh()->name); // normalisé minuscule
+    }
+
+    public function test_renommer_vers_un_nom_existant_fusionne(): void
+    {
+        $source = Tag::factory()->create(['name' => 'source']);
+        $cible  = Tag::factory()->create(['name' => 'cible']);
+
+        $item1 = Item::factory()->create();
+        $item2 = Item::factory()->create();
+        $item1->tags()->attach($source->id);
+        $item2->tags()->attach([$source->id, $cible->id]); // déjà les deux
+
+        $this->service->renommer($source->id, 'cible');
+
+        // le tag source a disparu
+        $this->assertNull(Tag::find($source->id));
+        // les items du source sont rattachés à cible, sans doublon
+        $this->assertTrue($item1->fresh()->tags->contains('id', $cible->id));
+        $this->assertSame(1, $item2->fresh()->tags()->where('tags.id', $cible->id)->count());
+    }
+
+    public function test_renommer_avec_nom_vide_ne_fait_rien(): void
+    {
+        $tag = Tag::factory()->create(['name' => 'stable']);
+
+        $this->service->renommer($tag->id, '   ');
+
+        $this->assertSame('stable', $tag->fresh()->name);
+    }
+
+    public function test_supprime_un_tag_du_vocabulaire(): void
+    {
+        $tag = Tag::factory()->create(['name' => 'jetable']);
+        $item = Item::factory()->create();
+        $item->tags()->attach($tag->id);
+
+        $this->service->supprimerDuVocabulaire($tag->id);
+
+        $this->assertNull(Tag::find($tag->id));
+        // l'association pivot part en cascade
+        $this->assertCount(0, $item->fresh()->tags);
+    }
 }
