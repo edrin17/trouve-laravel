@@ -2,12 +2,16 @@
 
 use App\Models\Item;
 use App\Models\Tag;
+use App\Services\ImageService;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 
 new class extends Component
 {
+    use WithFileUploads;
+
     public bool $ouvert = false;
 
     /** Item en cours d'édition (null = création). */
@@ -28,6 +32,11 @@ new class extends Component
     public array $tags = [];
     public string $tagSaisie = '';
 
+    /** Image : nouveau fichier uploadé (temporaire), nom du fichier déjà stocké, drapeau de suppression. */
+    public $photo = null;
+    public ?string $imageExistante = null;
+    public bool $imageSupprimee = false;
+
     protected function rules(): array
     {
         return [
@@ -36,6 +45,7 @@ new class extends Component
             'quantity'    => ['nullable', 'numeric', 'min:0', 'max:9999999'],
             'unit'        => ['nullable', 'string', 'max:20'],
             'is_container' => ['boolean'],
+            'photo'       => ['nullable', 'image', 'max:5120'], // 5 Mo
         ];
     }
 
@@ -46,6 +56,8 @@ new class extends Component
             'name.max'      => 'Le nom ne doit pas dépasser 100 caractères.',
             'quantity.numeric' => 'La quantité doit être un nombre.',
             'quantity.min'  => 'La quantité ne peut pas être négative.',
+            'photo.image'   => 'Le fichier doit être une image.',
+            'photo.max'     => 'L’image ne doit pas dépasser 5 Mo.',
         ];
     }
 
@@ -79,7 +91,31 @@ new class extends Component
         $this->unit         = $item->unit ?? '';
         $this->is_container = (bool) $item->is_container;
         $this->tags         = $item->tags->pluck('name')->all();
+        $this->imageExistante = $item->image_filename;
         $this->ouvert = true;
+    }
+
+    /** URL de l'aperçu : nouvelle photo si présente, sinon image stockée (sauf si supprimée). */
+    #[Computed]
+    public function apercu(): ?string
+    {
+        // temporaryUrl() ne fonctionne que pour un fichier prévisualisable (image) ;
+        // un mauvais type sera rejeté à la validation, pas affiché en aperçu.
+        if ($this->photo && $this->photo->isPreviewable()) {
+            return $this->photo->temporaryUrl();
+        }
+        if ($this->imageExistante && !$this->imageSupprimee) {
+            return (new ImageService())->url($this->imageExistante);
+        }
+        return null;
+    }
+
+    /** Marque l'image pour suppression (effective au prochain enregistrement). */
+    public function supprimerImage(): void
+    {
+        $this->photo = null;
+        $this->imageSupprimee = true;
+        unset($this->apercu);
     }
 
     /** Ajoute le tag saisi à la liste (normalisé, sans doublon). */
@@ -107,6 +143,7 @@ new class extends Component
         }
 
         $data = $this->validate();
+        unset($data['photo']); // pas une colonne — traitée séparément
         $data['quantity'] = ($data['quantity'] === null || $data['quantity'] === '') ? null : $data['quantity'];
 
         if ($this->itemId) {
@@ -117,6 +154,17 @@ new class extends Component
                 'house_id'  => $this->houseId,
                 'parent_id' => $this->parentId,
             ]);
+        }
+
+        // Image : nouvelle photo, ou suppression demandée. L'ancien fichier est
+        // remplacé dans les deux cas.
+        $imageService = new ImageService();
+        if ($this->photo) {
+            $imageService->supprimer($item->image_filename);
+            $item->update(['image_filename' => $imageService->stocker($this->photo)]);
+        } elseif ($this->imageSupprimee) {
+            $imageService->supprimer($item->image_filename);
+            $item->update(['image_filename' => null]);
         }
 
         // Synchronisation des tags (création à la volée du vocabulaire)
@@ -137,7 +185,7 @@ new class extends Component
 
     private function reinitialiser(): void
     {
-        $this->reset(['itemId', 'houseId', 'parentId', 'name', 'description', 'quantity', 'unit', 'tags', 'tagSaisie']);
+        $this->reset(['itemId', 'houseId', 'parentId', 'name', 'description', 'quantity', 'unit', 'tags', 'tagSaisie', 'photo', 'imageExistante', 'imageSupprimee']);
         $this->is_container = true;
         $this->resetValidation();
     }
@@ -206,6 +254,29 @@ new class extends Component
                             </datalist>
                             <button type="button" wire:click="ajouterTag"
                                     style="padding:.4rem .7rem;border:1px solid #c0bfbc;background:#fff;border-radius:6px;cursor:pointer;">+</button>
+                        </div>
+                    </div>
+
+                    {{-- Image --}}
+                    <div style="display:flex;flex-direction:column;gap:.3rem;font-size:.85rem;color:#5e5c64;">
+                        Image
+                        <div style="display:flex;align-items:flex-start;gap:.75rem;">
+                            @if ($this->apercu)
+                                <img src="{{ $this->apercu }}" alt="aperçu"
+                                     style="width:150px;height:150px;object-fit:cover;border:1px solid #c0bfbc;border-radius:6px;background:#faf7f5;">
+                            @else
+                                <div style="width:150px;height:150px;border:1px dashed #c0bfbc;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#9a9996;background:#faf7f5;">aucune</div>
+                            @endif
+                            <div style="display:flex;flex-direction:column;gap:.4rem;">
+                                <input type="file" wire:model="photo" accept="image/*"
+                                       style="font-size:.85rem;">
+                                <span wire:loading wire:target="photo" style="color:#5e5c64;font-style:italic;">Chargement…</span>
+                                @if ($this->apercu)
+                                    <button type="button" wire:click="supprimerImage"
+                                            style="align-self:flex-start;padding:.3rem .7rem;border:1px solid #c01c28;background:#fff;color:#c01c28;border-radius:6px;cursor:pointer;font-size:.8rem;">Retirer l’image</button>
+                                @endif
+                                @error('photo') <span style="color:#c01c28;font-size:.8rem;">{{ $message }}</span> @enderror
+                            </div>
                         </div>
                     </div>
 

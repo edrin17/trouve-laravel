@@ -5,7 +5,10 @@ namespace Tests\Feature\Livewire;
 use App\Models\House;
 use App\Models\Item;
 use App\Models\Tag;
+use App\Services\ImageService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -176,5 +179,80 @@ class ItemFormTest extends TestCase
 
         $item = Item::where('name', 'Objet')->first();
         $this->assertSame(['oubli'], $item->tags->pluck('name')->all());
+    }
+
+    public function test_upload_d_une_image_a_la_creation(): void
+    {
+        Storage::fake(ImageService::DISQUE);
+        $house = House::factory()->create();
+
+        Livewire::test(self::COMPONENT)
+            ->call('ouvrirCreation', $house->id, null)
+            ->set('name', 'Objet photo')
+            ->set('photo', UploadedFile::fake()->image('p.jpg', 500, 500))
+            ->call('enregistrer')
+            ->assertHasNoErrors();
+
+        $item = Item::where('name', 'Objet photo')->first();
+        $this->assertNotNull($item->image_filename);
+        Storage::disk(ImageService::DISQUE)->assertExists(ImageService::DOSSIER . '/' . $item->image_filename);
+    }
+
+    public function test_image_non_image_refusee(): void
+    {
+        Storage::fake(ImageService::DISQUE);
+        $house = House::factory()->create();
+
+        Livewire::test(self::COMPONENT)
+            ->call('ouvrirCreation', $house->id, null)
+            ->set('name', 'Objet')
+            ->set('photo', UploadedFile::fake()->create('doc.pdf', 100, 'application/pdf'))
+            ->call('enregistrer')
+            ->assertHasErrors(['photo']);
+    }
+
+    public function test_remplacement_d_image_supprime_l_ancienne(): void
+    {
+        Storage::fake(ImageService::DISQUE);
+        $ancienne = (new ImageService())->stocker(UploadedFile::fake()->image('vieux.jpg'));
+        $item = Item::factory()->create(['image_filename' => $ancienne]);
+
+        Livewire::test(self::COMPONENT)
+            ->call('ouvrirEdition', $item->id)
+            ->set('photo', UploadedFile::fake()->image('neuve.jpg'))
+            ->call('enregistrer')
+            ->assertHasNoErrors();
+
+        $item->refresh();
+        $this->assertNotSame($ancienne, $item->image_filename);
+        Storage::disk(ImageService::DISQUE)->assertMissing(ImageService::DOSSIER . '/' . $ancienne);
+        Storage::disk(ImageService::DISQUE)->assertExists(ImageService::DOSSIER . '/' . $item->image_filename);
+    }
+
+    public function test_suppression_d_image(): void
+    {
+        Storage::fake(ImageService::DISQUE);
+        $fichier = (new ImageService())->stocker(UploadedFile::fake()->image('x.jpg'));
+        $item = Item::factory()->create(['image_filename' => $fichier]);
+
+        Livewire::test(self::COMPONENT)
+            ->call('ouvrirEdition', $item->id)
+            ->call('supprimerImage')
+            ->call('enregistrer')
+            ->assertHasNoErrors();
+
+        $this->assertNull($item->fresh()->image_filename);
+        Storage::disk(ImageService::DISQUE)->assertMissing(ImageService::DOSSIER . '/' . $fichier);
+    }
+
+    public function test_suppression_d_item_supprime_son_image(): void
+    {
+        Storage::fake(ImageService::DISQUE);
+        $fichier = (new ImageService())->stocker(UploadedFile::fake()->image('x.jpg'));
+        $item = Item::factory()->create(['image_filename' => $fichier]);
+
+        $item->delete(); // déclenche l'event deleting du modèle
+
+        Storage::disk(ImageService::DISQUE)->assertMissing(ImageService::DOSSIER . '/' . $fichier);
     }
 }

@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use App\Services\ImageService;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,6 +15,18 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Item extends Model
 {
     use HasFactory;
+
+    /**
+     * Supprime le fichier image quand l'item est détruit via le modèle.
+     * (Les suppressions en cascade DB ne déclenchent pas cet event — la couche
+     * appelante doit alors nettoyer les fichiers du sous-arbre explicitement.)
+     */
+    protected static function booted(): void
+    {
+        static::deleting(function (Item $item) {
+            (new ImageService())->supprimer($item->image_filename);
+        });
+    }
 
     /** Champs assignables en masse. */
     protected $fillable = [
@@ -31,6 +45,12 @@ class Item extends Model
         'quantity'     => 'decimal:2',
         'is_container' => 'boolean',
     ];
+
+    /** URL publique de l'image (null si aucune). */
+    protected function imageUrl(): Attribute
+    {
+        return Attribute::get(fn () => (new ImageService())->url($this->image_filename));
+    }
 
     /** Maison de rattachement. */
     public function house(): BelongsTo

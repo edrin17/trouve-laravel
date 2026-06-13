@@ -33,6 +33,10 @@
             <span style="width:1rem;display:inline-block;"></span>
         @endif
         <span>{{ $item->is_container ? '📦' : '•' }}</span>
+        @if ($item->image_filename)
+            <img src="{{ $item->image_url }}" alt=""
+                 style="width:28px;height:28px;object-fit:cover;border-radius:4px;border:1px solid #e0e0e0;flex:none;">
+        @endif
         <span style="font-weight:{{ $item->is_container ? '600' : '400' }};">{{ $item->name }}</span>
 
         @if (!is_null($item->quantity))

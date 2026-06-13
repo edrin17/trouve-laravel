@@ -5,7 +5,10 @@ namespace Database\Seeders;
 use App\Models\House;
 use App\Models\Item;
 use App\Models\Tag;
+use App\Services\ImageService;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
  * Données de démonstration — portage de init_mode_debug() de la v1 Python.
@@ -71,5 +74,34 @@ class DemoSeeder extends Seeder
         $placard->tags()->attach($rangement->id);
         $pullBleu->tags()->attach($vetement->id);
         $vesteRouge->tags()->attach($vetement->id);
+
+        // ── Images de démo (portage de _generer_images_debug v1) ──
+        $this->imageDemo($telecommande, [52, 152, 219]);  // bleu
+        $this->imageDemo($pullBleu, [41, 128, 185]);       // bleu foncé
+        $this->imageDemo($vesteRouge, [192, 57, 43]);      // rouge
+    }
+
+    /**
+     * Génère une image PNG unie via GD et l'assigne à un item (via le disque
+     * public, comme un upload réel). Sans dépendance externe.
+     *
+     * @param  array{int,int,int}  $rgb
+     */
+    private function imageDemo(Item $item, array $rgb): void
+    {
+        $img = imagecreatetruecolor(400, 300);
+        $couleur = imagecolorallocate($img, $rgb[0], $rgb[1], $rgb[2]);
+        imagefill($img, 0, 0, $couleur);
+        $blanc = imagecolorallocate($img, 255, 255, 255);
+        imagestring($img, 5, 20, 20, $item->name, $blanc);
+
+        ob_start();
+        imagejpeg($img, null, 85);
+        $contenu = ob_get_clean();
+        imagedestroy($img);
+
+        $filename = Str::uuid()->toString() . '.jpg';
+        Storage::disk(ImageService::DISQUE)->put(ImageService::DOSSIER . '/' . $filename, $contenu);
+        $item->update(['image_filename' => $filename]);
     }
 }

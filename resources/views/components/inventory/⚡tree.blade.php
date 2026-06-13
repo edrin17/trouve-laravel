@@ -2,6 +2,7 @@
 
 use App\Models\House;
 use App\Models\Item;
+use App\Services\ImageService;
 use App\Services\ItemService;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
@@ -60,15 +61,39 @@ new class extends Component
     /** Supprime un item et son sous-arbre (CASCADE). */
     public function supprimer(int $itemId): void
     {
-        Item::whereKey($itemId)->delete();
+        $item = Item::find($itemId);
+        if ($item) {
+            $this->nettoyerImages((new ItemService())->idsDescendants($item));
+            Item::whereKey($itemId)->delete();
+        }
         unset($this->maisons, $this->resultats);
     }
 
     /** Supprime une maison et tout son contenu (CASCADE). */
     public function supprimerMaison(int $houseId): void
     {
+        $this->nettoyerImages(Item::where('house_id', $houseId)->pluck('id')->all());
         House::whereKey($houseId)->delete();
         unset($this->maisons, $this->resultats);
+    }
+
+    /**
+     * Supprime du disque les fichiers image des items donnés.
+     * La cascade SQL ne déclenche pas l'event `deleting` du modèle, donc on
+     * nettoie explicitement avant la suppression en masse.
+     *
+     * @param  array<int>  $itemIds
+     */
+    private function nettoyerImages(array $itemIds): void
+    {
+        if (empty($itemIds)) {
+            return;
+        }
+        $service = new ImageService();
+        Item::whereIn('id', $itemIds)
+            ->whereNotNull('image_filename')
+            ->pluck('image_filename')
+            ->each(fn ($f) => $service->supprimer($f));
     }
 
     /** Rafraîchit l'arbre après une création/édition dans la modale. */
