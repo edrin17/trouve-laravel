@@ -161,6 +161,14 @@ new class extends Component
         <button type="button"
                 wire:click="$dispatch('maison-creer')"
                 style="border:1px solid #fff;background:transparent;color:#fff;border-radius:6px;padding:.2rem .6rem;cursor:pointer;font-size:.9rem;">+ Nouvelle maison</button>
+        <span style="border-left:1px solid rgba(255,255,255,.4);padding-left:.6rem;margin-left:.3rem;display:flex;align-items:center;gap:.5rem;">
+            <span style="font-size:.85rem;opacity:.9;">{{ auth()->user()->name }}</span>
+            <form method="POST" action="{{ route('logout') }}" style="margin:0;">
+                @csrf
+                <button type="submit"
+                        style="border:1px solid #fff;background:transparent;color:#fff;border-radius:6px;padding:.2rem .6rem;cursor:pointer;font-size:.9rem;">Déconnexion</button>
+            </form>
+        </span>
     </header>
     <main>
     <input

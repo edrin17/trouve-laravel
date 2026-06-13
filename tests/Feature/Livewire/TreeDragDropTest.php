@@ -4,6 +4,7 @@ namespace Tests\Feature\Livewire;
 
 use App\Models\House;
 use App\Models\Item;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -13,6 +14,12 @@ class TreeDragDropTest extends TestCase
     use RefreshDatabase;
 
     private const COMPONENT = 'inventory.tree';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->actingAs(User::factory()->create()); // le tree vit derrière le middleware auth
+    }
 
     public function test_drop_sur_conteneur_change_le_parent(): void
     {

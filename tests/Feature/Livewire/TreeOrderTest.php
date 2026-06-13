@@ -4,6 +4,7 @@ namespace Tests\Feature\Livewire;
 
 use App\Models\House;
 use App\Models\Item;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -11,6 +12,12 @@ use Tests\TestCase;
 class TreeOrderTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->actingAs(User::factory()->create()); // le tree vit derrière le middleware auth
+    }
 
     public function test_les_objets_simples_apparaissent_avant_les_conteneurs(): void
     {

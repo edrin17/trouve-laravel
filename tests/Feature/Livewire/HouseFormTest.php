@@ -4,6 +4,7 @@ namespace Tests\Feature\Livewire;
 
 use App\Models\House;
 use App\Models\Item;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -13,6 +14,12 @@ class HouseFormTest extends TestCase
     use RefreshDatabase;
 
     private const COMPONENT = 'inventory.house-form';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->actingAs(User::factory()->create()); // le tree vit derrière le middleware auth
+    }
 
     public function test_cree_une_maison(): void
     {
