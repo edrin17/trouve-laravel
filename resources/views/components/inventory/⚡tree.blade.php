@@ -92,4 +92,5 @@ new class extends Component
     </main>
 
     <livewire:inventory.item-form />
+    <livewire:inventory.item-move />
 </div>

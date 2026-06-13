@@ -22,6 +22,9 @@
             <button type="button" title="Modifier"
                     wire:click="$dispatch('item-editer', { itemId: {{ $item->id }} })"
                     style="border:none;background:transparent;cursor:pointer;font-size:.9rem;">✏️</button>
+            <button type="button" title="Déplacer"
+                    wire:click="$dispatch('item-deplacer', { itemId: {{ $item->id }} })"
+                    style="border:none;background:transparent;cursor:pointer;font-size:.9rem;">↪️</button>
             <button type="button" title="Supprimer"
                     wire:click="supprimer({{ $item->id }})"
                     wire:confirm="Supprimer « {{ $item->name }} » et tout son contenu ?"
