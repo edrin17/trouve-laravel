@@ -1,4 +1,4 @@
-@props(['item'])
+@props(['item', 'modeSelection' => false])
 
 @php($aEnfants = $item->descendants->isNotEmpty())
 
@@ -6,17 +6,24 @@
     @expand-all.window="ouvert = true"
     @collapse-all.window="ouvert = false">
     <div wire:key="item-{{ $item->id }}"
-         draggable="true"
-         @dragstart="draggedId = {{ $item->id }}; $event.dataTransfer.effectAllowed = 'move'"
-         @dragend="draggedId = null"
-         @if ($item->is_container)
-             @dragover.prevent="survol = (draggedId && draggedId !== {{ $item->id }})"
-             @dragleave="survol = false"
-             @drop.prevent.stop="survol = false; if (draggedId && draggedId !== {{ $item->id }}) $wire.deplacerVers(draggedId, 'item:{{ $item->id }}')"
-         @endif
+         draggable="{{ $modeSelection ? 'false' : 'true' }}"
+         @unless ($modeSelection)
+             @dragstart="draggedId = {{ $item->id }}; $event.dataTransfer.effectAllowed = 'move'"
+             @dragend="draggedId = null"
+             @if ($item->is_container)
+                 @dragover.prevent="survol = (draggedId && draggedId !== {{ $item->id }})"
+                 @dragleave="survol = false"
+                 @drop.prevent.stop="survol = false; if (draggedId && draggedId !== {{ $item->id }}) $wire.deplacerVers(draggedId, 'item:{{ $item->id }}')"
+             @endif
+         @endunless
          :style="survol
             ? 'padding:.3rem .5rem;background:#e8f0fe;border:1px solid #3584e4;border-radius:6px;display:flex;align-items:center;gap:.4rem;cursor:grab;'
             : 'padding:.3rem .5rem;background:#fff;border:1px solid #e8e8e8;border-radius:6px;display:flex;align-items:center;gap:.4rem;cursor:grab;'">
+        @if ($modeSelection)
+            <input type="checkbox" wire:model.live="selection" value="{{ $item->id }}"
+                   title="Sélectionner cet objet"
+                   style="width:1.1rem;height:1.1rem;cursor:pointer;flex:none;">
+        @endif
         @if ($aEnfants)
             <button type="button" @click="ouvert = !ouvert"
                     title="Déplier / replier"
@@ -36,7 +43,7 @@
             <span style="background:#e8f0fe;color:#1a73e8;border-radius:10px;padding:0 .5rem;font-size:.75rem;">{{ $tag->name }}</span>
         @endforeach
 
-        <span style="margin-left:auto;display:flex;gap:.25rem;">
+        <span style="margin-left:auto;display:flex;gap:.25rem;{{ $modeSelection ? 'visibility:hidden;' : '' }}">
             @if ($item->is_container)
                 <button type="button" title="Ajouter un objet ici"
                         wire:click="$dispatch('item-creer', { houseId: {{ $item->house_id }}, parentId: {{ $item->id }} })"
@@ -59,7 +66,7 @@
         <ul x-show="ouvert" x-cloak
             style="list-style:none;padding-left:1.25rem;margin:.15rem 0;border-left:1px dashed #d0d0d0;">
             @foreach ($item->descendants->sortBy([['is_container', 'asc'], ['name', 'asc']]) as $enfant)
-                <x-inventory.item-node :item="$enfant" />
+                <x-inventory.item-node :item="$enfant" :mode-selection="$modeSelection" />
             @endforeach
         </ul>
     @endif

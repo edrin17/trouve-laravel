@@ -12,6 +12,27 @@ new class extends Component
     /** Terme de recherche live. */
     public string $recherche = '';
 
+    /** Mode sélection multiple actif. */
+    public bool $modeSelection = false;
+
+    /** Ids des items cochés (en mode sélection). */
+    public array $selection = [];
+
+    /** Active/désactive le mode sélection (vide la sélection en sortant). */
+    public function basculerSelection(): void
+    {
+        $this->modeSelection = !$this->modeSelection;
+        if (!$this->modeSelection) {
+            $this->selection = [];
+        }
+    }
+
+    /** Vide la sélection sans quitter le mode. */
+    public function toutDeselectionner(): void
+    {
+        $this->selection = [];
+    }
+
     /** Maisons avec leurs items racines (et tout le sous-arbre + tags). */
     #[Computed]
     public function maisons()
@@ -57,6 +78,15 @@ new class extends Component
         unset($this->maisons, $this->resultats);
     }
 
+    /** Tags par lot appliqués : on vide la sélection et on sort du mode. */
+    #[On('tags-par-lot-applique')]
+    public function apresTagsParLot(): void
+    {
+        $this->selection = [];
+        $this->modeSelection = false;
+        unset($this->maisons, $this->resultats);
+    }
+
     /**
      * Déplace un item (drag & drop) vers une cible "house:ID" ou "item:ID".
      * Ignore silencieusement les déplacements invalides (anti-cycle, cible
@@ -98,8 +128,11 @@ new class extends Component
     <header class="app-bar">
         <h1>Trouve — Inventaire</h1>
         <button type="button"
+                wire:click="basculerSelection"
+                style="margin-left:auto;border:1px solid #fff;border-radius:6px;padding:.2rem .6rem;cursor:pointer;font-size:.9rem;{{ $modeSelection ? 'background:#fff;color:#3584e4;' : 'background:transparent;color:#fff;' }}">{{ $modeSelection ? '✓ Sélection' : '☑️ Sélectionner' }}</button>
+        <button type="button"
                 wire:click="$dispatch('maison-creer')"
-                style="margin-left:auto;border:1px solid #fff;background:transparent;color:#fff;border-radius:6px;padding:.2rem .6rem;cursor:pointer;font-size:.9rem;">+ Nouvelle maison</button>
+                style="border:1px solid #fff;background:transparent;color:#fff;border-radius:6px;padding:.2rem .6rem;cursor:pointer;font-size:.9rem;">+ Nouvelle maison</button>
     </header>
     <main>
     <input
@@ -157,7 +190,7 @@ new class extends Component
                 </h2>
                 <ul style="list-style:none;padding-left:1.25rem;margin:.15rem 0;border-left:1px dashed #d0d0d0;">
                     @foreach ($maison->rootItems as $item)
-                        <x-inventory.item-node :item="$item" />
+                        <x-inventory.item-node :item="$item" :mode-selection="$modeSelection" />
                     @endforeach
                 </ul>
             </section>
@@ -165,7 +198,20 @@ new class extends Component
     @endif
     </main>
 
+    {{-- Barre d'action de la sélection multiple --}}
+    @if ($modeSelection && count($selection) > 0)
+        <div style="position:fixed;left:0;right:0;bottom:0;background:#3584e4;color:#fff;display:flex;align-items:center;gap:.75rem;padding:.6rem 1rem;box-shadow:0 -4px 16px rgba(0,0,0,.2);z-index:40;">
+            <span style="font-weight:600;">{{ count($selection) }} objet(s) sélectionné(s)</span>
+            <button type="button"
+                    wire:click="$dispatch('tags-lot-ouvrir', { itemIds: {{ json_encode(array_map('intval', $selection)) }} })"
+                    style="margin-left:auto;border:none;background:#fff;color:#3584e4;border-radius:6px;padding:.35rem .8rem;cursor:pointer;font-weight:600;">🏷️ Tags par lot</button>
+            <button type="button" wire:click="toutDeselectionner"
+                    style="border:1px solid #fff;background:transparent;color:#fff;border-radius:6px;padding:.35rem .8rem;cursor:pointer;">Tout décocher</button>
+        </div>
+    @endif
+
     <livewire:inventory.house-form />
     <livewire:inventory.item-form />
     <livewire:inventory.item-move />
+    <livewire:inventory.item-tag-bulk />
 </div>
