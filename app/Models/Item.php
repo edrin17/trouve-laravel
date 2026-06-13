@@ -50,6 +50,12 @@ class Item extends Model
         return $this->hasMany(Item::class, 'parent_id');
     }
 
+    /** Sous-arbre complet : enfants + tags, récursivement (pour l'affichage). */
+    public function descendants(): HasMany
+    {
+        return $this->children()->with('tags', 'descendants');
+    }
+
     /** Tags associés à cet item (many-to-many via item_tag). */
     public function tags(): BelongsToMany
     {

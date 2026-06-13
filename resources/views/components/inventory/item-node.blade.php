@@ -1,0 +1,24 @@
+@props(['item'])
+
+<li style="margin:.15rem 0;">
+    <div style="padding:.3rem .5rem;background:#fff;border:1px solid #e8e8e8;border-radius:6px;display:flex;align-items:center;gap:.4rem;">
+        <span>{{ $item->is_container ? '📦' : '•' }}</span>
+        <span style="font-weight:{{ $item->is_container ? '600' : '400' }};">{{ $item->name }}</span>
+
+        @if (!is_null($item->quantity))
+            <span style="color:#5e5c64;font-size:.85rem;">×{{ rtrim(rtrim((string) $item->quantity, '0'), '.') }}{{ $item->unit ? ' '.$item->unit : '' }}</span>
+        @endif
+
+        @foreach ($item->tags as $tag)
+            <span style="background:#e8f0fe;color:#1a73e8;border-radius:10px;padding:0 .5rem;font-size:.75rem;">{{ $tag->name }}</span>
+        @endforeach
+    </div>
+
+    @if ($item->descendants->isNotEmpty())
+        <ul style="list-style:none;padding-left:1.25rem;margin:.15rem 0;border-left:1px dashed #d0d0d0;">
+            @foreach ($item->descendants->sortBy('name') as $enfant)
+                <x-inventory.item-node :item="$enfant" />
+            @endforeach
+        </ul>
+    @endif
+</li>
