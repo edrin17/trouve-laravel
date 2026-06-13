@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\Item;
+use App\Models\Tag;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Component;
 
@@ -21,6 +23,10 @@ new class extends Component
     public ?string $quantity = null;
     public string $unit = '';
     public bool $is_container = true;
+
+    /** Tags : liste de noms (chips) + saisie courante. */
+    public array $tags = [];
+    public string $tagSaisie = '';
 
     protected function rules(): array
     {
@@ -43,7 +49,13 @@ new class extends Component
         ];
     }
 
-    /** Ouvre la modale en mode CRÉATION sous un parent (ou racine de maison). */
+    /** Vocabulaire de tags existants (pour les suggestions). */
+    #[Computed]
+    public function vocabulaire(): array
+    {
+        return Tag::orderBy('name')->pluck('name')->all();
+    }
+
     #[On('item-creer')]
     public function ouvrirCreation(int $houseId, ?int $parentId = null): void
     {
@@ -53,12 +65,11 @@ new class extends Component
         $this->ouvert = true;
     }
 
-    /** Ouvre la modale en mode ÉDITION d'un item existant. */
     #[On('item-editer')]
     public function ouvrirEdition(int $itemId): void
     {
         $this->reinitialiser();
-        $item = Item::findOrFail($itemId);
+        $item = Item::with('tags')->findOrFail($itemId);
         $this->itemId       = $item->id;
         $this->houseId      = $item->house_id;
         $this->parentId     = $item->parent_id;
@@ -67,22 +78,52 @@ new class extends Component
         $this->quantity     = $item->quantity !== null ? (string) (float) $item->quantity : null;
         $this->unit         = $item->unit ?? '';
         $this->is_container = (bool) $item->is_container;
+        $this->tags         = $item->tags->pluck('name')->all();
         $this->ouvert = true;
+    }
+
+    /** Ajoute le tag saisi à la liste (normalisé, sans doublon). */
+    public function ajouterTag(): void
+    {
+        foreach (explode(';', $this->tagSaisie) as $brut) {
+            $tag = trim(mb_strtolower($brut));
+            if ($tag !== '' && !in_array($tag, $this->tags, true)) {
+                $this->tags[] = $tag;
+            }
+        }
+        $this->tagSaisie = '';
+    }
+
+    public function retirerTag(string $nom): void
+    {
+        $this->tags = array_values(array_filter($this->tags, fn ($t) => $t !== $nom));
     }
 
     public function enregistrer(): void
     {
+        // Tag resté dans le champ de saisie : on l'ajoute avant de valider
+        if (trim($this->tagSaisie) !== '') {
+            $this->ajouterTag();
+        }
+
         $data = $this->validate();
         $data['quantity'] = ($data['quantity'] === null || $data['quantity'] === '') ? null : $data['quantity'];
 
         if ($this->itemId) {
-            Item::findOrFail($this->itemId)->update($data);
+            $item = Item::findOrFail($this->itemId);
+            $item->update($data);
         } else {
-            Item::create($data + [
+            $item = Item::create($data + [
                 'house_id'  => $this->houseId,
                 'parent_id' => $this->parentId,
             ]);
         }
+
+        // Synchronisation des tags (création à la volée du vocabulaire)
+        $tagIds = collect($this->tags)
+            ->map(fn (string $nom) => Tag::firstOrCreate(['name' => $nom])->id)
+            ->all();
+        $item->tags()->sync($tagIds);
 
         $this->ouvert = false;
         $this->dispatch('arbre-modifie');
@@ -96,7 +137,7 @@ new class extends Component
 
     private function reinitialiser(): void
     {
-        $this->reset(['itemId', 'houseId', 'parentId', 'name', 'description', 'quantity', 'unit']);
+        $this->reset(['itemId', 'houseId', 'parentId', 'name', 'description', 'quantity', 'unit', 'tags', 'tagSaisie']);
         $this->is_container = true;
         $this->resetValidation();
     }
@@ -107,7 +148,7 @@ new class extends Component
     @if ($ouvert)
         <div style="position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;z-index:50;"
              wire:click.self="fermer">
-            <div style="background:#fff;border-radius:10px;padding:1.25rem;width:min(480px,92vw);box-shadow:0 10px 40px rgba(0,0,0,.25);">
+            <div style="background:#fff;border-radius:10px;padding:1.25rem;width:min(480px,92vw);box-shadow:0 10px 40px rgba(0,0,0,.25);max-height:90vh;overflow:auto;">
                 <h2 style="margin-top:0;font-size:1.1rem;">{{ $itemId ? 'Modifier l’objet' : 'Nouvel objet' }}</h2>
 
                 <form wire:submit="enregistrer" style="display:flex;flex-direction:column;gap:.75rem;">
@@ -139,6 +180,34 @@ new class extends Component
                             </label>
                         </div>
                     @endunless
+
+                    {{-- Tags --}}
+                    <div style="display:flex;flex-direction:column;gap:.3rem;font-size:.85rem;color:#5e5c64;">
+                        Tags
+                        @if (count($tags))
+                            <div style="display:flex;flex-wrap:wrap;gap:.3rem;">
+                                @foreach ($tags as $t)
+                                    <span style="background:#e8f0fe;color:#1a73e8;border-radius:12px;padding:.1rem .5rem;font-size:.8rem;display:inline-flex;align-items:center;gap:.3rem;">
+                                        {{ $t }}
+                                        <button type="button" wire:click="retirerTag('{{ $t }}')"
+                                                style="border:none;background:transparent;color:#1a73e8;cursor:pointer;font-size:.9rem;line-height:1;">×</button>
+                                    </span>
+                                @endforeach
+                            </div>
+                        @endif
+                        <div style="display:flex;gap:.4rem;">
+                            <input type="text" wire:model="tagSaisie" wire:keydown.enter.prevent="ajouterTag"
+                                   list="vocab-tags" placeholder="ajouter un tag (Entrée)…"
+                                   style="flex:1;padding:.4rem;border:1px solid #c0bfbc;border-radius:6px;">
+                            <datalist id="vocab-tags">
+                                @foreach ($this->vocabulaire as $v)
+                                    <option value="{{ $v }}"></option>
+                                @endforeach
+                            </datalist>
+                            <button type="button" wire:click="ajouterTag"
+                                    style="padding:.4rem .7rem;border:1px solid #c0bfbc;background:#fff;border-radius:6px;cursor:pointer;">+</button>
+                        </div>
+                    </div>
 
                     <label style="display:flex;flex-direction:column;gap:.2rem;font-size:.85rem;color:#5e5c64;">
                         Description

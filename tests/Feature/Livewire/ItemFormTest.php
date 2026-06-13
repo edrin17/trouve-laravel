@@ -4,6 +4,7 @@ namespace Tests\Feature\Livewire;
 
 use App\Models\House;
 use App\Models\Item;
+use App\Models\Tag;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -96,5 +97,84 @@ class ItemFormTest extends TestCase
             ->set('name', 'brouillon')
             ->call('fermer')
             ->assertSet('ouvert', false);
+    }
+
+    public function test_ajoute_des_tags_a_la_creation(): void
+    {
+        $house = House::factory()->create();
+
+        Livewire::test(self::COMPONENT)
+            ->call('ouvrirCreation', $house->id, null)
+            ->set('name', 'Marteau')
+            ->set('tagSaisie', 'bricolage')
+            ->call('ajouterTag')
+            ->assertSet('tags', ['bricolage'])
+            ->set('tagSaisie', 'outil')
+            ->call('ajouterTag')
+            ->call('enregistrer')
+            ->assertHasNoErrors();
+
+        $item = Item::where('name', 'Marteau')->first();
+        $this->assertEqualsCanonicalizing(['bricolage', 'outil'], $item->tags->pluck('name')->all());
+    }
+
+    public function test_ajoute_tag_normalise_et_sans_doublon(): void
+    {
+        $house = House::factory()->create();
+
+        Livewire::test(self::COMPONENT)
+            ->call('ouvrirCreation', $house->id, null)
+            ->set('tagSaisie', '  FRAGILE ')
+            ->call('ajouterTag')
+            ->set('tagSaisie', 'fragile')
+            ->call('ajouterTag')
+            ->assertSet('tags', ['fragile']); // normalisé minuscule + pas de doublon
+    }
+
+    public function test_saisie_multiple_separee_par_point_virgule(): void
+    {
+        $house = House::factory()->create();
+
+        Livewire::test(self::COMPONENT)
+            ->call('ouvrirCreation', $house->id, null)
+            ->set('tagSaisie', 'a; b; c')
+            ->call('ajouterTag')
+            ->assertSet('tags', ['a', 'b', 'c']);
+    }
+
+    public function test_retire_un_tag(): void
+    {
+        $house = House::factory()->create();
+
+        Livewire::test(self::COMPONENT)
+            ->call('ouvrirCreation', $house->id, null)
+            ->set('tags', ['x', 'y', 'z'])
+            ->call('retirerTag', 'y')
+            ->assertSet('tags', ['x', 'z']);
+    }
+
+    public function test_edition_precharge_les_tags(): void
+    {
+        $item = Item::factory()->create();
+        $item->tags()->attach(Tag::factory()->create(['name' => 'existant'])->id);
+
+        Livewire::test(self::COMPONENT)
+            ->call('ouvrirEdition', $item->id)
+            ->assertSet('tags', ['existant']);
+    }
+
+    public function test_enregistre_le_tag_reste_dans_la_saisie(): void
+    {
+        $house = House::factory()->create();
+
+        Livewire::test(self::COMPONENT)
+            ->call('ouvrirCreation', $house->id, null)
+            ->set('name', 'Objet')
+            ->set('tagSaisie', 'oubli') // non confirmé par Entrée
+            ->call('enregistrer')
+            ->assertHasNoErrors();
+
+        $item = Item::where('name', 'Objet')->first();
+        $this->assertSame(['oubli'], $item->tags->pluck('name')->all());
     }
 }
