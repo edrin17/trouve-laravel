@@ -76,8 +76,15 @@ new class extends Component
 
             <label style="display:flex;flex-direction:column;gap:.2rem;font-size:.85rem;color:#5e5c64;">
                 Mot de passe
-                <input type="password" wire:model="password" autocomplete="current-password"
-                       style="padding:.5rem;border:1px solid #c0bfbc;border-radius:6px;font-size:1rem;">
+                <div x-data="{ visible: false }" style="position:relative;display:flex;">
+                    <input :type="visible ? 'text' : 'password'" wire:model="password" autocomplete="current-password"
+                           style="flex:1;padding:.5rem 2.4rem .5rem .5rem;border:1px solid #c0bfbc;border-radius:6px;font-size:1rem;">
+                    <button type="button" @click="visible = !visible"
+                            :title="visible ? 'Masquer le mot de passe' : 'Afficher le mot de passe'"
+                            :aria-label="visible ? 'Masquer le mot de passe' : 'Afficher le mot de passe'"
+                            style="position:absolute;right:.4rem;top:50%;transform:translateY(-50%);border:none;background:transparent;cursor:pointer;font-size:1.1rem;padding:0;line-height:1;"
+                            x-text="visible ? '🙈' : '👁️'"></button>
+                </div>
                 @error('password') <span style="color:#c01c28;font-size:.8rem;">{{ $message }}</span> @enderror
             </label>
 
