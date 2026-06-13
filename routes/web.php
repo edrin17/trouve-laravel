@@ -6,6 +6,9 @@ use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/inventory');
 
+// Page de repli hors connexion (servie par le service worker quand le réseau échoue)
+Route::view('/offline', 'offline')->name('offline');
+
 // Page de connexion (accessible uniquement aux visiteurs non authentifiés)
 Route::livewire('/login', 'auth.login')->middleware('guest')->name('login');
 

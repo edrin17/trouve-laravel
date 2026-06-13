@@ -6,6 +6,12 @@
 
         <title>{{ $title ?? config('app.name') }}</title>
 
+        {{-- PWA --}}
+        <link rel="manifest" href="/manifest.json">
+        <meta name="theme-color" content="#3584e4">
+        <link rel="icon" type="image/png" href="/icons/icon-192.png">
+        <link rel="apple-touch-icon" href="/icons/icon-192.png">
+
         <style>
             * { box-sizing: border-box; }
             [x-cloak] { display: none !important; }
@@ -33,5 +39,14 @@
         {{ $slot }}
 
         @livewireScripts
+
+        {{-- Enregistrement du service worker (PWA) --}}
+        <script>
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('/sw.js').catch(() => {});
+                });
+            }
+        </script>
     </body>
 </html>
