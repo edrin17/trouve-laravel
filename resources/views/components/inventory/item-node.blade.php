@@ -1,7 +1,7 @@
 @props(['item'])
 
 <li style="margin:.15rem 0;">
-    <div style="padding:.3rem .5rem;background:#fff;border:1px solid #e8e8e8;border-radius:6px;display:flex;align-items:center;gap:.4rem;">
+    <div style="padding:.3rem .5rem;background:#fff;border:1px solid #e8e8e8;border-radius:6px;display:flex;align-items:center;gap:.4rem;" wire:key="item-{{ $item->id }}">
         <span>{{ $item->is_container ? '📦' : '•' }}</span>
         <span style="font-weight:{{ $item->is_container ? '600' : '400' }};">{{ $item->name }}</span>
 
@@ -12,6 +12,21 @@
         @foreach ($item->tags as $tag)
             <span style="background:#e8f0fe;color:#1a73e8;border-radius:10px;padding:0 .5rem;font-size:.75rem;">{{ $tag->name }}</span>
         @endforeach
+
+        <span style="margin-left:auto;display:flex;gap:.25rem;">
+            @if ($item->is_container)
+                <button type="button" title="Ajouter un objet ici"
+                        wire:click="$dispatch('item-creer', { houseId: {{ $item->house_id }}, parentId: {{ $item->id }} })"
+                        style="border:none;background:transparent;cursor:pointer;font-size:.9rem;">➕</button>
+            @endif
+            <button type="button" title="Modifier"
+                    wire:click="$dispatch('item-editer', { itemId: {{ $item->id }} })"
+                    style="border:none;background:transparent;cursor:pointer;font-size:.9rem;">✏️</button>
+            <button type="button" title="Supprimer"
+                    wire:click="supprimer({{ $item->id }})"
+                    wire:confirm="Supprimer « {{ $item->name }} » et tout son contenu ?"
+                    style="border:none;background:transparent;cursor:pointer;font-size:.9rem;">🗑️</button>
+        </span>
     </div>
 
     @if ($item->descendants->isNotEmpty())
