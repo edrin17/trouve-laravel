@@ -39,6 +39,13 @@ new class extends Component
         unset($this->maisons, $this->resultats);
     }
 
+    /** Supprime une maison et tout son contenu (CASCADE). */
+    public function supprimerMaison(int $houseId): void
+    {
+        House::whereKey($houseId)->delete();
+        unset($this->maisons, $this->resultats);
+    }
+
     /** Rafraîchit l'arbre après une création/édition dans la modale. */
     #[On('arbre-modifie')]
     public function rafraichir(): void
@@ -86,6 +93,9 @@ new class extends Component
 <div x-data="{ draggedId: null }">
     <header class="app-bar">
         <h1>Trouve — Inventaire</h1>
+        <button type="button"
+                wire:click="$dispatch('maison-creer')"
+                style="margin-left:auto;border:1px solid #fff;background:transparent;color:#fff;border-radius:6px;padding:.2rem .6rem;cursor:pointer;font-size:.9rem;">+ Nouvelle maison</button>
     </header>
     <main>
     <input
@@ -118,10 +128,19 @@ new class extends Component
                 <h2 style="font-size:1rem;border-bottom:2px solid #3584e4;padding-bottom:.25rem;display:flex;align-items:center;gap:.5rem;">
                     🏠 {{ $maison->name }}
                     <span style="font-size:.7rem;color:#5e5c64;font-weight:400;">(déposer ici = racine)</span>
-                    <button type="button"
-                            wire:click="$dispatch('item-creer', { houseId: {{ $maison->id }} })"
-                            title="Ajouter un objet à la racine"
-                            style="margin-left:auto;border:1px solid #3584e4;background:#fff;color:#3584e4;border-radius:6px;padding:0 .5rem;cursor:pointer;font-size:.9rem;">+ Ajouter</button>
+                    <span style="margin-left:auto;display:flex;gap:.3rem;align-items:center;">
+                        <button type="button"
+                                wire:click="$dispatch('item-creer', { houseId: {{ $maison->id }} })"
+                                title="Ajouter un objet à la racine"
+                                style="border:1px solid #3584e4;background:#fff;color:#3584e4;border-radius:6px;padding:0 .5rem;cursor:pointer;font-size:.9rem;">+ Ajouter</button>
+                        <button type="button" title="Renommer la maison"
+                                wire:click="$dispatch('maison-editer', { houseId: {{ $maison->id }} })"
+                                style="border:none;background:transparent;cursor:pointer;font-size:.9rem;">✏️</button>
+                        <button type="button" title="Supprimer la maison"
+                                wire:click="supprimerMaison({{ $maison->id }})"
+                                wire:confirm="Supprimer la maison « {{ $maison->name }} » et TOUT son contenu ?"
+                                style="border:none;background:transparent;cursor:pointer;font-size:.9rem;">🗑️</button>
+                    </span>
                 </h2>
                 <ul style="list-style:none;padding-left:0;margin:0;">
                     @foreach ($maison->rootItems as $item)
@@ -133,6 +152,7 @@ new class extends Component
     @endif
     </main>
 
+    <livewire:inventory.house-form />
     <livewire:inventory.item-form />
     <livewire:inventory.item-move />
 </div>
