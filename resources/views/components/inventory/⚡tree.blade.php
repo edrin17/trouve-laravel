@@ -105,6 +105,15 @@ new class extends Component
         style="width:100%;padding:.5rem .75rem;border:1px solid #c0bfbc;border-radius:6px;margin-bottom:1rem;font-size:1rem;"
     >
 
+    @if (trim($recherche) === '')
+        <div style="display:flex;gap:.5rem;margin-bottom:.75rem;">
+            <button type="button" @click="$dispatch('expand-all')"
+                    style="border:1px solid #c0bfbc;background:#fff;border-radius:6px;padding:.2rem .6rem;cursor:pointer;font-size:.8rem;color:#5e5c64;">▾ Tout déplier</button>
+            <button type="button" @click="$dispatch('collapse-all')"
+                    style="border:1px solid #c0bfbc;background:#fff;border-radius:6px;padding:.2rem .6rem;cursor:pointer;font-size:.8rem;color:#5e5c64;">▸ Tout replier</button>
+        </div>
+    @endif
+
     @if (trim($recherche) !== '')
         <p style="color:#5e5c64;font-size:.9rem;">{{ $this->resultats->count() }} résultat(s)</p>
         <ul style="list-style:none;padding:0;margin:0;">

@@ -1,8 +1,11 @@
 @props(['item'])
 
-<li style="margin:.15rem 0;">
+@php($aEnfants = $item->descendants->isNotEmpty())
+
+<li style="margin:.15rem 0;" x-data="{ ouvert: true, survol: false }"
+    @expand-all.window="ouvert = true"
+    @collapse-all.window="ouvert = false">
     <div wire:key="item-{{ $item->id }}"
-         x-data="{ survol: false }"
          draggable="true"
          @dragstart="draggedId = {{ $item->id }}; $event.dataTransfer.effectAllowed = 'move'"
          @dragend="draggedId = null"
@@ -14,6 +17,14 @@
          :style="survol
             ? 'padding:.3rem .5rem;background:#e8f0fe;border:1px solid #3584e4;border-radius:6px;display:flex;align-items:center;gap:.4rem;cursor:grab;'
             : 'padding:.3rem .5rem;background:#fff;border:1px solid #e8e8e8;border-radius:6px;display:flex;align-items:center;gap:.4rem;cursor:grab;'">
+        @if ($aEnfants)
+            <button type="button" @click="ouvert = !ouvert"
+                    title="Déplier / replier"
+                    style="border:none;background:transparent;cursor:pointer;width:1rem;padding:0;color:#5e5c64;font-size:.8rem;"
+                    x-text="ouvert ? '▾' : '▸'"></button>
+        @else
+            <span style="width:1rem;display:inline-block;"></span>
+        @endif
         <span>{{ $item->is_container ? '📦' : '•' }}</span>
         <span style="font-weight:{{ $item->is_container ? '600' : '400' }};">{{ $item->name }}</span>
 
@@ -44,8 +55,9 @@
         </span>
     </div>
 
-    @if ($item->descendants->isNotEmpty())
-        <ul style="list-style:none;padding-left:1.25rem;margin:.15rem 0;border-left:1px dashed #d0d0d0;">
+    @if ($aEnfants)
+        <ul x-show="ouvert" x-cloak
+            style="list-style:none;padding-left:1.25rem;margin:.15rem 0;border-left:1px dashed #d0d0d0;">
             @foreach ($item->descendants->sortBy('name') as $enfant)
                 <x-inventory.item-node :item="$enfant" />
             @endforeach

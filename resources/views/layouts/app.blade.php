@@ -8,6 +8,7 @@
 
         <style>
             * { box-sizing: border-box; }
+            [x-cloak] { display: none !important; }
             body {
                 font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
                 margin: 0;
