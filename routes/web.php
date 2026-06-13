@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\SyncController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -23,3 +24,9 @@ Route::post('/logout', function (Request $request) {
 
 // Application : réservée aux utilisateurs authentifiés
 Route::livewire('/inventory', 'inventory.tree')->middleware('auth')->name('inventory');
+
+// Synchronisation hors-ligne (même session que l'app — pas d'API token pour 3 users)
+Route::middleware('auth')->group(function () {
+    Route::post('/sync/push', [SyncController::class, 'push'])->name('sync.push');
+    Route::get('/sync/pull', [SyncController::class, 'pull'])->name('sync.pull');
+});

@@ -36,10 +36,25 @@ class Item extends Model
             }
         });
 
+        // Verrouillage optimiste : toute modification métier réelle incrémente
+        // version, qu'elle vienne de l'UI Livewire ou de la synchro. Indispensable
+        // pour que les autres clients détectent les éditions faites en ligne.
+        static::updating(function (Item $item) {
+            if ($item->isDirty(self::CHAMPS_VERSIONNES)) {
+                $item->version = (int) $item->getOriginal('version') + 1;
+            }
+        });
+
         static::deleting(function (Item $item) {
             (new ImageService())->supprimer($item->image_filename);
         });
     }
+
+    /** Champs métier dont la modification incrémente la version (exclut uuid/version/conflit/timestamps). */
+    private const CHAMPS_VERSIONNES = [
+        'name', 'description', 'quantity', 'unit',
+        'house_id', 'parent_id', 'is_container', 'image_filename',
+    ];
 
     /** Champs assignables en masse. */
     protected $fillable = [

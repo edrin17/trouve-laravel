@@ -25,7 +25,17 @@ class House extends Model
                 $house->en_conflit = false;
             }
         });
+
+        // Verrouillage optimiste : toute modification métier réelle incrémente version.
+        static::updating(function (House $house) {
+            if ($house->isDirty(self::CHAMPS_VERSIONNES)) {
+                $house->version = (int) $house->getOriginal('version') + 1;
+            }
+        });
     }
+
+    /** Champs métier dont la modification incrémente la version. */
+    private const CHAMPS_VERSIONNES = ['name', 'description'];
 
     /** Champs assignables en masse. */
     protected $fillable = [

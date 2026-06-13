@@ -12,10 +12,13 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        // Endpoints de synchro = API JSON same-origin consommée par le client offline.
+        // On garde l'auth par session mais on exclut ces routes du CSRF web.
+        $middleware->validateCsrfTokens(except: ['sync/*']);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // Rendre les erreurs (validation 422, auth 401) en JSON pour l'API de synchro.
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*'),
+            fn (Request $request) => $request->is('api/*') || $request->is('sync/*'),
         );
     })->create();
