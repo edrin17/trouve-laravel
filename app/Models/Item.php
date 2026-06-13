@@ -23,6 +23,19 @@ class Item extends Model
      */
     protected static function booted(): void
     {
+        // uuid stable + version initiale garantis dès la création (cf. sync hors-ligne)
+        static::creating(function (Item $item) {
+            if (empty($item->uuid)) {
+                $item->uuid = (string) \Illuminate\Support\Str::uuid();
+            }
+            if ($item->version === null) {
+                $item->version = 1;
+            }
+            if ($item->en_conflit === null) {
+                $item->en_conflit = false;
+            }
+        });
+
         static::deleting(function (Item $item) {
             (new ImageService())->supprimer($item->image_filename);
         });
@@ -38,12 +51,18 @@ class Item extends Model
         'parent_id',
         'is_container',
         'image_filename',
+        'uuid',
+        'version',
+        'en_conflit',
+        'conflit_de',
     ];
 
     /** Conversions de types automatiques. */
     protected $casts = [
         'quantity'     => 'decimal:2',
         'is_container' => 'boolean',
+        'version'      => 'integer',
+        'en_conflit'   => 'boolean',
     ];
 
     /** URL publique de l'image (null si aucune). */
