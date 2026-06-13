@@ -58,7 +58,7 @@
     @if ($aEnfants)
         <ul x-show="ouvert" x-cloak
             style="list-style:none;padding-left:1.25rem;margin:.15rem 0;border-left:1px dashed #d0d0d0;">
-            @foreach ($item->descendants->sortBy('name') as $enfant)
+            @foreach ($item->descendants->sortBy([['is_container', 'asc'], ['name', 'asc']]) as $enfant)
                 <x-inventory.item-node :item="$enfant" />
             @endforeach
         </ul>

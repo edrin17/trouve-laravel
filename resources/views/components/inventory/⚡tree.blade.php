@@ -16,7 +16,11 @@ new class extends Component
     #[Computed]
     public function maisons()
     {
-        return House::with(['rootItems' => fn ($q) => $q->orderBy('name'), 'rootItems.tags', 'rootItems.descendants'])
+        return House::with([
+                'rootItems' => fn ($q) => $q->orderBy('is_container')->orderBy('name'),
+                'rootItems.tags',
+                'rootItems.descendants',
+            ])
             ->orderBy('name')
             ->get();
     }
@@ -151,7 +155,7 @@ new class extends Component
                                 style="border:none;background:transparent;cursor:pointer;font-size:.9rem;">🗑️</button>
                     </span>
                 </h2>
-                <ul style="list-style:none;padding-left:0;margin:0;">
+                <ul style="list-style:none;padding-left:1.25rem;margin:.15rem 0;border-left:1px dashed #d0d0d0;">
                     @foreach ($maison->rootItems as $item)
                         <x-inventory.item-node :item="$item" />
                     @endforeach
