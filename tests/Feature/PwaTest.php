@@ -35,8 +35,21 @@ class PwaTest extends TestCase
     {
         $chemin = public_path('sw.js');
         $this->assertFileExists($chemin);
+        $sw = file_get_contents($chemin);
         // ne met pas en cache Livewire (sinon casse la réactivité)
-        $this->assertStringContainsString('/livewire', file_get_contents($chemin));
+        $this->assertStringContainsString('/livewire', $sw);
+        // précache la page et le script de consultation hors-ligne
+        $this->assertStringContainsString('/js/offline-inventaire.js', $sw);
+        // met en cache le snapshot de l'inventaire pour la lecture hors-ligne
+        $this->assertStringContainsString('/sync/pull', $sw);
+    }
+
+    public function test_les_scripts_de_consultation_hors_ligne_existent(): void
+    {
+        // réchauffe le cache tant qu'on est en ligne
+        $this->assertFileExists(public_path('js/offline-cache.js'));
+        // rend l'inventaire en lecture seule à partir du snapshot caché
+        $this->assertFileExists(public_path('js/offline-inventaire.js'));
     }
 
     public function test_les_icones_existent(): void

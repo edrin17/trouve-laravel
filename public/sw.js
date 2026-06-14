@@ -1,10 +1,16 @@
-// Service worker de Trouve — cache de l'app (PAS des données).
+// Service worker de Trouve — cache de l'app (shell) ET, depuis v2, un snapshot
+// de l'inventaire (réponse de /sync/pull) pour la consultation HORS-LIGNE en
+// lecture seule. Les mutations restent en ligne (Livewire exige le réseau).
 // Incrémenter CACHE à chaque modification pour purger l'ancien cache.
-const CACHE = 'trouve-v1';
+const CACHE = 'trouve-v2';
+
+// Endpoint dont la réponse JSON est cachée pour la consultation hors-ligne.
+const SNAPSHOT = '/sync/pull';
 
 // Ressources mises en cache dès l'installation (le « shell » minimal).
 const PRECACHE = [
     '/offline',
+    '/js/offline-inventaire.js',
     '/manifest.json',
     '/icons/icon-192.png',
     '/icons/icon-512.png',
@@ -38,6 +44,25 @@ self.addEventListener('fetch', (event) => {
 
     // Ne jamais mettre en cache Livewire (réactivité) ni le service worker lui-même.
     if (url.pathname.startsWith('/livewire') || url.pathname === '/sw.js') {
+        return;
+    }
+
+    // Snapshot de l'inventaire : réseau d'abord (et on met à jour le cache pour
+    // la prochaine coupure), repli sur la dernière réponse cachée hors-ligne.
+    // Si rien en cache (jamais pullé / cache purgé), l'échec se propage : la
+    // page /offline le détecte et invite à se reconnecter.
+    if (url.pathname === SNAPSHOT) {
+        event.respondWith(
+            fetch(request)
+                .then((reponse) => {
+                    if (reponse.ok) {
+                        const copie = reponse.clone();
+                        caches.open(CACHE).then((cache) => cache.put(SNAPSHOT, copie));
+                    }
+                    return reponse;
+                })
+                .catch(() => caches.match(SNAPSHOT))
+        );
         return;
     }
 

@@ -65,4 +65,21 @@ class SyncEndpointsTest extends TestCase
             ->assertOk()
             ->assertJsonStructure(['curseur', 'houses', 'items']);
     }
+
+    /** Le snapshot doit porter les champs consommés par la vue hors-ligne (lecture seule). */
+    public function test_pull_expose_les_champs_attendus_par_la_vue_offline(): void
+    {
+        $house = House::factory()->create();
+        $item = Item::factory()->create(['house_id' => $house->id]);
+        $item->tags()->create(['name' => 'outils']);
+
+        $this->actingAs(User::factory()->create())
+            ->getJson('/sync/pull')
+            ->assertOk()
+            ->assertJsonStructure([
+                'items' => [['id', 'name', 'parent_id', 'house_id', 'is_container',
+                             'quantity', 'unit', 'image_filename', 'en_conflit',
+                             'tags' => [['id', 'name']]]],
+            ]);
+    }
 }

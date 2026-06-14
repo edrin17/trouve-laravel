@@ -48,5 +48,8 @@
                 });
             }
         </script>
+
+        {{-- Réchauffe le cache de l'inventaire pour la consultation hors-ligne --}}
+        <script src="/js/offline-cache.js" defer></script>
     </body>
 </html>
