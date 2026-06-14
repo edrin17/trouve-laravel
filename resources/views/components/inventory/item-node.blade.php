@@ -16,9 +16,10 @@
                  @drop.prevent.stop="survol = false; if (draggedId && draggedId !== {{ $item->id }}) $wire.deplacerVers(draggedId, 'item:{{ $item->id }}')"
              @endif
          @endunless
+         @php($bordureBase = $item->en_conflit ? '#f0a30a' : '#e8e8e8')
          :style="survol
             ? 'padding:.3rem .5rem;background:#e8f0fe;border:1px solid #3584e4;border-radius:6px;display:flex;align-items:center;gap:.4rem;cursor:grab;'
-            : 'padding:.3rem .5rem;background:#fff;border:1px solid #e8e8e8;border-radius:6px;display:flex;align-items:center;gap:.4rem;cursor:grab;'">
+            : 'padding:.3rem .5rem;background:{{ $item->en_conflit ? '#fff8ec' : '#fff' }};border:1px solid {{ $bordureBase }};{{ $item->en_conflit ? 'border-left:4px solid #f0a30a;' : '' }}border-radius:6px;display:flex;align-items:center;gap:.4rem;cursor:grab;'">
         @if ($modeSelection)
             <input type="checkbox" wire:model.live="selection" value="{{ $item->id }}"
                    title="Sélectionner cet objet"
@@ -38,6 +39,10 @@
                  style="width:28px;height:28px;object-fit:cover;border-radius:4px;border:1px solid #e0e0e0;flex:none;">
         @endif
         <span style="font-weight:{{ $item->is_container ? '600' : '400' }};">{{ $item->name }}</span>
+        @if ($item->en_conflit)
+            <span title="Objet en conflit — à résoudre"
+                  style="background:#f0a30a;color:#fff;border-radius:10px;padding:0 .5rem;font-size:.7rem;font-weight:600;">⚠ conflit</span>
+        @endif
 
         @if (!is_null($item->quantity))
             <span style="color:#5e5c64;font-size:.85rem;">×{{ rtrim(rtrim((string) $item->quantity, '0'), '.') }}{{ $item->unit ? ' '.$item->unit : '' }}</span>

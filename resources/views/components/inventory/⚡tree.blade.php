@@ -2,6 +2,7 @@
 
 use App\Models\House;
 use App\Models\Item;
+use App\Services\ConflitService;
 use App\Services\ImageService;
 use App\Services\ItemService;
 use Livewire\Attributes\Computed;
@@ -18,6 +19,9 @@ new class extends Component
 
     /** Ids des items cochés (en mode sélection). */
     public array $selection = [];
+
+    /** N'afficher que les objets en conflit (liste à plat). */
+    public bool $filtreConflits = false;
 
     /** Active/désactive le mode sélection (vide la sélection en sortant). */
     public function basculerSelection(): void
@@ -56,6 +60,55 @@ new class extends Component
             return collect();
         }
         return Item::search($terme)->with('tags')->orderBy('name')->get();
+    }
+
+    /** Objets en conflit, à plat (pour le bandeau et le filtre). */
+    #[Computed]
+    public function conflits()
+    {
+        return Item::where('en_conflit', true)->with('tags')->orderBy('name')->get();
+    }
+
+    /** Nombre de conflits à résoudre. */
+    #[Computed]
+    public function nbConflits(): int
+    {
+        return Item::where('en_conflit', true)->count();
+    }
+
+    /** Bascule l'affichage filtré sur les seuls conflits. */
+    public function basculerFiltreConflits(): void
+    {
+        $this->filtreConflits = !$this->filtreConflits;
+    }
+
+    /** « Garder cette version » : le doublon gagne, l'original est supprimé. */
+    public function garderConflit(int $itemId): void
+    {
+        $item = Item::find($itemId);
+        if ($item) {
+            (new ConflitService())->garder($item);
+        }
+        $this->apresResolution();
+    }
+
+    /** « Garder les deux » : lève le marquage, conserve les deux objets. */
+    public function accepterConflit(int $itemId): void
+    {
+        $item = Item::find($itemId);
+        if ($item) {
+            (new ConflitService())->accepter($item);
+        }
+        $this->apresResolution();
+    }
+
+    /** Invalide les computed et sort du filtre s'il ne reste plus de conflit. */
+    private function apresResolution(): void
+    {
+        unset($this->maisons, $this->resultats, $this->conflits, $this->nbConflits);
+        if ($this->nbConflits === 0) {
+            $this->filtreConflits = false;
+        }
     }
 
     /** Supprime un item et son sous-arbre (CASCADE). */
@@ -100,7 +153,7 @@ new class extends Component
     #[On('arbre-modifie')]
     public function rafraichir(): void
     {
-        unset($this->maisons, $this->resultats);
+        unset($this->maisons, $this->resultats, $this->conflits, $this->nbConflits);
     }
 
     /** Tags par lot appliqués : on vide la sélection et on sort du mode. */
@@ -178,7 +231,50 @@ new class extends Component
         style="width:100%;padding:.5rem .75rem;border:1px solid #c0bfbc;border-radius:6px;margin-bottom:1rem;font-size:1rem;"
     >
 
-    @if (trim($recherche) === '')
+    {{-- Bandeau de conflits à résoudre --}}
+    @if ($this->nbConflits > 0)
+        <div style="display:flex;align-items:center;gap:.75rem;background:#fff4e5;border:1px solid #f0a30a;border-radius:6px;padding:.5rem .75rem;margin-bottom:1rem;">
+            <span style="font-weight:600;color:#8a5a00;">⚠️ {{ $this->nbConflits }} conflit(s) à résoudre</span>
+            <button type="button" wire:click="basculerFiltreConflits"
+                    style="margin-left:auto;border:1px solid #f0a30a;background:{{ $filtreConflits ? '#f0a30a' : '#fff' }};color:{{ $filtreConflits ? '#fff' : '#8a5a00' }};border-radius:6px;padding:.2rem .6rem;cursor:pointer;font-size:.85rem;">
+                {{ $filtreConflits ? '↩ Voir tout l\'inventaire' : '🔎 Ne voir que les conflits' }}
+            </button>
+        </div>
+    @endif
+
+    @if ($filtreConflits)
+        {{-- Liste à plat des objets en conflit --}}
+        <ul style="list-style:none;padding:0;margin:0;">
+            @forelse ($this->conflits as $item)
+                <li wire:key="conflit-{{ $item->id }}"
+                    style="padding:.5rem .6rem;background:#fff;border:1px solid #f0a30a;border-left:4px solid #f0a30a;border-radius:6px;margin-bottom:.4rem;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
+                    <span>{{ $item->is_container ? '📦' : '•' }}</span>
+                    @if ($item->image_filename)
+                        <img src="{{ $item->image_url }}" alt=""
+                             style="width:28px;height:28px;object-fit:cover;border-radius:4px;border:1px solid #e0e0e0;flex:none;">
+                    @endif
+                    <span style="font-weight:600;">{{ $item->name }}</span>
+                    @foreach ($item->tags as $tag)
+                        <span style="background:#e8f0fe;color:#1a73e8;border-radius:10px;padding:0 .5rem;font-size:.75rem;">{{ $tag->name }}</span>
+                    @endforeach
+                    <span style="margin-left:auto;display:flex;gap:.3rem;">
+                        <button type="button" title="Modifier (fusionner à la main)"
+                                wire:click="$dispatch('item-editer', { itemId: {{ $item->id }} })"
+                                style="border:1px solid #c0bfbc;background:#fff;border-radius:6px;padding:.2rem .5rem;cursor:pointer;font-size:.8rem;">✏️ Fusionner</button>
+                        <button type="button" title="Garder les deux objets"
+                                wire:click="accepterConflit({{ $item->id }})"
+                                style="border:1px solid #3584e4;background:#fff;color:#3584e4;border-radius:6px;padding:.2rem .5rem;cursor:pointer;font-size:.8rem;">⇄ Garder les deux</button>
+                        <button type="button" title="Garder cette version, supprimer l'autre"
+                                wire:click="garderConflit({{ $item->id }})"
+                                wire:confirm="Garder « {{ $item->name }} » et supprimer l'autre version ?"
+                                style="border:1px solid #2e7d32;background:#2e7d32;color:#fff;border-radius:6px;padding:.2rem .5rem;cursor:pointer;font-size:.8rem;">✅ Garder cette version</button>
+                    </span>
+                </li>
+            @empty
+                <p style="color:#5e5c64;">Aucun conflit.</p>
+            @endforelse
+        </ul>
+    @elseif (trim($recherche) === '')
         <div style="display:flex;gap:.5rem;margin-bottom:.75rem;">
             <button type="button" @click="$dispatch('expand-all')"
                     style="border:1px solid #c0bfbc;background:#fff;border-radius:6px;padding:.2rem .6rem;cursor:pointer;font-size:.8rem;color:#5e5c64;">▾ Tout déplier</button>
@@ -187,6 +283,7 @@ new class extends Component
         </div>
     @endif
 
+    @unless ($filtreConflits)
     @if (trim($recherche) !== '')
         <p style="color:#5e5c64;font-size:.9rem;">{{ $this->resultats->count() }} résultat(s)</p>
         <ul style="list-style:none;padding:0;margin:0;">
@@ -232,6 +329,7 @@ new class extends Component
             </section>
         @endforeach
     @endif
+    @endunless
     </main>
 
     {{-- Barre d'action de la sélection multiple --}}
