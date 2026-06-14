@@ -20,7 +20,7 @@ new class extends Component
     /** Ids des items cochés (en mode sélection). */
     public array $selection = [];
 
-    /** N'afficher que les objets en conflit (liste à plat). */
+    /** N'afficher que les conflits (cartes de comparaison côte à côte). */
     public bool $filtreConflits = false;
 
     /** Active/désactive le mode sélection (vide la sélection en sortant). */
@@ -62,11 +62,58 @@ new class extends Component
         return Item::search($terme)->with('tags')->orderBy('name')->get();
     }
 
-    /** Objets en conflit, à plat (pour le bandeau et le filtre). */
+    /**
+     * Conflits à résoudre, sous forme de comparaisons. Pour chaque doublon
+     * (en_conflit) on charge l'original officiel (uuid = conflit_de) afin de
+     * présenter les deux versions côte à côte avec leurs différences.
+     * Si l'original a disparu (update-vs-delete), `original` est null.
+     */
     #[Computed]
-    public function conflits()
+    public function comparaisons()
     {
-        return Item::where('en_conflit', true)->with('tags')->orderBy('name')->get();
+        $doublons = Item::where('en_conflit', true)->with('tags')->orderBy('name')->get();
+
+        $uuids = $doublons->pluck('conflit_de')->filter()->all();
+        $originaux = Item::whereIn('uuid', $uuids)->with('tags')->get()->keyBy('uuid');
+
+        $nettoyeur = new ConflitService();
+
+        return $doublons->map(function ($doublon) use ($originaux, $nettoyeur) {
+            $original = $originaux->get($doublon->conflit_de);
+
+            return [
+                'titre'    => $nettoyeur->nomNettoye($doublon->name),
+                'doublon'  => $doublon,
+                'original' => $original,
+                'diffs'    => $this->differences($original, $doublon),
+            ];
+        });
+    }
+
+    /**
+     * Champs métier qui diffèrent entre l'original et le doublon, pour surligner.
+     * Renvoie un tableau associatif champ => bool (true si différent).
+     * Tout est marqué « différent » si l'original a disparu.
+     *
+     * @return array<string,bool>
+     */
+    private function differences(?Item $original, Item $doublon): array
+    {
+        if (! $original) {
+            // L'original a disparu : tout est « différent » par convention.
+            return ['name' => true, 'description' => true, 'quantity' => true, 'tags' => true];
+        }
+
+        $tags = fn ($item) => $item->tags->pluck('name')->sort()->values()->all();
+        // On compare le nom du doublon SANS son suffixe de conflit.
+        $nomDoublon = (new ConflitService())->nomNettoye($doublon->name);
+
+        return [
+            'name'        => $original->name !== $nomDoublon,
+            'description' => ($original->description ?? '') !== ($doublon->description ?? ''),
+            'quantity'    => (string) $original->quantity !== (string) $doublon->quantity,
+            'tags'        => $tags($original) !== $tags($doublon),
+        ];
     }
 
     /** Nombre de conflits à résoudre. */
@@ -82,12 +129,22 @@ new class extends Component
         $this->filtreConflits = !$this->filtreConflits;
     }
 
-    /** « Garder cette version » : le doublon gagne, l'original est supprimé. */
+    /** « Garder ma version » : le doublon gagne, l'original est supprimé. */
     public function garderConflit(int $itemId): void
     {
         $item = Item::find($itemId);
         if ($item) {
             (new ConflitService())->garder($item);
+        }
+        $this->apresResolution();
+    }
+
+    /** « Garder la version serveur » : l'original gagne, le doublon est supprimé. */
+    public function garderOriginal(int $itemId): void
+    {
+        $item = Item::find($itemId);
+        if ($item) {
+            (new ConflitService())->garderServeur($item);
         }
         $this->apresResolution();
     }
@@ -105,7 +162,7 @@ new class extends Component
     /** Invalide les computed et sort du filtre s'il ne reste plus de conflit. */
     private function apresResolution(): void
     {
-        unset($this->maisons, $this->resultats, $this->conflits, $this->nbConflits);
+        unset($this->maisons, $this->resultats, $this->comparaisons, $this->nbConflits);
         if ($this->nbConflits === 0) {
             $this->filtreConflits = false;
         }
@@ -153,7 +210,7 @@ new class extends Component
     #[On('arbre-modifie')]
     public function rafraichir(): void
     {
-        unset($this->maisons, $this->resultats, $this->conflits, $this->nbConflits);
+        unset($this->maisons, $this->resultats, $this->comparaisons, $this->nbConflits);
     }
 
     /** Tags par lot appliqués : on vide la sélection et on sort du mode. */
@@ -243,37 +300,70 @@ new class extends Component
     @endif
 
     @if ($filtreConflits)
-        {{-- Liste à plat des objets en conflit --}}
-        <ul style="list-style:none;padding:0;margin:0;">
-            @forelse ($this->conflits as $item)
-                <li wire:key="conflit-{{ $item->id }}"
-                    style="padding:.5rem .6rem;background:#fff;border:1px solid #f0a30a;border-left:4px solid #f0a30a;border-radius:6px;margin-bottom:.4rem;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
-                    <span>{{ $item->is_container ? '📦' : '•' }}</span>
-                    @if ($item->image_filename)
-                        <img src="{{ $item->image_url }}" alt=""
-                             style="width:28px;height:28px;object-fit:cover;border-radius:4px;border:1px solid #e0e0e0;flex:none;">
+        {{-- Cartes de comparaison : les deux versions côte à côte --}}
+        @php($surligne = 'background:#fff4d6;border-radius:4px;padding:0 .25rem;')
+        @forelse ($this->comparaisons as $c)
+            @php($doublon = $c['doublon'])
+            @php($original = $c['original'])
+            @php($diffs = $c['diffs'])
+            <div wire:key="conflit-{{ $doublon->id }}"
+                 style="border:1px solid #f0a30a;border-radius:8px;margin-bottom:1rem;overflow:hidden;">
+                <div style="background:#fff4e5;padding:.5rem .75rem;font-weight:600;color:#8a5a00;border-bottom:1px solid #f0a30a;">
+                    ⚠️ Conflit sur « {{ $c['titre'] }} »
+                </div>
+                <div style="display:flex;flex-wrap:wrap;">
+                    {{-- Colonne gauche : version serveur (l'original officiel) --}}
+                    <div style="flex:1;min-width:240px;padding:.75rem;border-right:1px solid #eee;">
+                        <p style="margin:0 0 .5rem;font-size:.8rem;text-transform:uppercase;letter-spacing:.03em;color:#5e5c64;">Version actuelle (serveur)</p>
+                        @if ($original)
+                            <div style="font-size:.9rem;line-height:1.6;">
+                                <div>Nom : <span style="{{ $diffs['name'] ? $surligne : '' }}">{{ $original->name }}</span></div>
+                                <div>Description : <span style="{{ $diffs['description'] ? $surligne : '' }}">{{ $original->description ?: '—' }}</span></div>
+                                <div>Quantité : <span style="{{ $diffs['quantity'] ? $surligne : '' }}">{{ is_null($original->quantity) ? '—' : rtrim(rtrim((string) $original->quantity, '0'), '.') }}</span></div>
+                                <div style="{{ $diffs['tags'] ? $surligne : '' }}">Tags :
+                                    @forelse ($original->tags as $tag)<span style="background:#e8f0fe;color:#1a73e8;border-radius:10px;padding:0 .5rem;font-size:.75rem;">{{ $tag->name }}</span>@empty —@endforelse
+                                </div>
+                            </div>
+                            <button type="button"
+                                    wire:click="garderOriginal({{ $doublon->id }})"
+                                    wire:confirm="Garder la version serveur et supprimer la vôtre ?"
+                                    style="margin-top:.6rem;border:1px solid #2e7d32;background:#2e7d32;color:#fff;border-radius:6px;padding:.3rem .7rem;cursor:pointer;font-size:.85rem;">✅ Garder celle-ci</button>
+                        @else
+                            <p style="color:#b3261e;font-size:.9rem;">L'original a été supprimé ailleurs pendant votre déconnexion. Seule votre version subsiste.</p>
+                        @endif
+                    </div>
+                    {{-- Colonne droite : ma version (le doublon) --}}
+                    <div style="flex:1;min-width:240px;padding:.75rem;background:#fffdf7;">
+                        <p style="margin:0 0 .5rem;font-size:.8rem;text-transform:uppercase;letter-spacing:.03em;color:#5e5c64;">Votre version</p>
+                        <div style="font-size:.9rem;line-height:1.6;">
+                            <div>Nom : <span style="{{ $diffs['name'] ? $surligne : '' }}">{{ $c['titre'] }}</span></div>
+                            <div>Description : <span style="{{ $diffs['description'] ? $surligne : '' }}">{{ $doublon->description ?: '—' }}</span></div>
+                            <div>Quantité : <span style="{{ $diffs['quantity'] ? $surligne : '' }}">{{ is_null($doublon->quantity) ? '—' : rtrim(rtrim((string) $doublon->quantity, '0'), '.') }}</span></div>
+                            <div style="{{ $diffs['tags'] ? $surligne : '' }}">Tags :
+                                @forelse ($doublon->tags as $tag)<span style="background:#e8f0fe;color:#1a73e8;border-radius:10px;padding:0 .5rem;font-size:.75rem;">{{ $tag->name }}</span>@empty —@endforelse
+                            </div>
+                        </div>
+                        <button type="button"
+                                wire:click="garderConflit({{ $doublon->id }})"
+                                wire:confirm="Garder votre version{{ $original ? ' et supprimer celle du serveur' : '' }} ?"
+                                style="margin-top:.6rem;border:1px solid #2e7d32;background:#2e7d32;color:#fff;border-radius:6px;padding:.3rem .7rem;cursor:pointer;font-size:.85rem;">✅ Garder celle-ci</button>
+                    </div>
+                </div>
+                {{-- Actions globales du conflit --}}
+                <div style="display:flex;gap:.5rem;justify-content:flex-end;padding:.5rem .75rem;background:#fafafa;border-top:1px solid #eee;">
+                    @if ($original)
+                        <button type="button" title="Conserver les deux objets distincts"
+                                wire:click="accepterConflit({{ $doublon->id }})"
+                                style="border:1px solid #3584e4;background:#fff;color:#3584e4;border-radius:6px;padding:.3rem .7rem;cursor:pointer;font-size:.85rem;">⇄ Garder les deux</button>
                     @endif
-                    <span style="font-weight:600;">{{ $item->name }}</span>
-                    @foreach ($item->tags as $tag)
-                        <span style="background:#e8f0fe;color:#1a73e8;border-radius:10px;padding:0 .5rem;font-size:.75rem;">{{ $tag->name }}</span>
-                    @endforeach
-                    <span style="margin-left:auto;display:flex;gap:.3rem;">
-                        <button type="button" title="Modifier (fusionner à la main)"
-                                wire:click="$dispatch('item-editer', { itemId: {{ $item->id }} })"
-                                style="border:1px solid #c0bfbc;background:#fff;border-radius:6px;padding:.2rem .5rem;cursor:pointer;font-size:.8rem;">✏️ Fusionner</button>
-                        <button type="button" title="Garder les deux objets"
-                                wire:click="accepterConflit({{ $item->id }})"
-                                style="border:1px solid #3584e4;background:#fff;color:#3584e4;border-radius:6px;padding:.2rem .5rem;cursor:pointer;font-size:.8rem;">⇄ Garder les deux</button>
-                        <button type="button" title="Garder cette version, supprimer l'autre"
-                                wire:click="garderConflit({{ $item->id }})"
-                                wire:confirm="Garder « {{ $item->name }} » et supprimer l'autre version ?"
-                                style="border:1px solid #2e7d32;background:#2e7d32;color:#fff;border-radius:6px;padding:.2rem .5rem;cursor:pointer;font-size:.8rem;">✅ Garder cette version</button>
-                    </span>
-                </li>
-            @empty
-                <p style="color:#5e5c64;">Aucun conflit.</p>
-            @endforelse
-        </ul>
+                    <button type="button" title="Éditer pour fusionner à la main"
+                            wire:click="$dispatch('item-editer', { itemId: {{ $doublon->id }} })"
+                            style="border:1px solid #c0bfbc;background:#fff;border-radius:6px;padding:.3rem .7rem;cursor:pointer;font-size:.85rem;">✏️ Fusionner</button>
+                </div>
+            </div>
+        @empty
+            <p style="color:#5e5c64;">Aucun conflit.</p>
+        @endforelse
     @elseif (trim($recherche) === '')
         <div style="display:flex;gap:.5rem;margin-bottom:.75rem;">
             <button type="button" @click="$dispatch('expand-all')"

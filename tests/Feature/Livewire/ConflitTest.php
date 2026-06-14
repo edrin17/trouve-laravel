@@ -40,7 +40,7 @@ class ConflitTest extends TestCase
         return [$original, $doublon];
     }
 
-    public function test_garder_supprime_l_original_et_leve_le_marquage(): void
+    public function test_garder_supprime_l_original_leve_le_marquage_et_nettoie_le_nom(): void
     {
         [$original, $doublon] = $this->couple();
 
@@ -50,6 +50,72 @@ class ConflitTest extends TestCase
         $gagnant = $doublon->fresh();
         $this->assertFalse($gagnant->en_conflit);
         $this->assertNull($gagnant->conflit_de);
+        // le suffixe « (conflit — Bob) » est retiré
+        $this->assertSame('Perceuse', $gagnant->name);
+    }
+
+    public function test_garder_serveur_supprime_le_doublon_et_garde_l_original(): void
+    {
+        [$original, $doublon] = $this->couple();
+
+        $this->assertTrue((new ConflitService())->garderServeur($doublon->fresh()));
+
+        // le doublon disparaît, l'original (intact) subsiste
+        $this->assertDatabaseMissing('items', ['id' => $doublon->id]);
+        $this->assertDatabaseHas('items', ['id' => $original->id, 'name' => 'Perceuse']);
+        $this->assertFalse($original->fresh()->en_conflit);
+    }
+
+    public function test_garder_serveur_reattache_les_enfants_du_doublon_a_l_original(): void
+    {
+        [$original, $doublon] = $this->couple();
+        $enfant = Item::factory()->create([
+            'house_id'  => $doublon->house_id,
+            'parent_id' => $doublon->id,
+        ]);
+
+        (new ConflitService())->garderServeur($doublon->fresh());
+
+        // l'enfant du doublon n'est pas perdu : il passe sous l'original
+        $this->assertSame($original->id, $enfant->fresh()->parent_id);
+    }
+
+    public function test_accepter_nettoie_aussi_le_nom(): void
+    {
+        [, $doublon] = $this->couple();
+
+        (new ConflitService())->accepter($doublon->fresh());
+
+        $this->assertSame('Perceuse', $doublon->fresh()->name);
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('nomsDeConflit')]
+    public function test_nettoyage_du_suffixe_de_conflit(string $entree, string $attendu): void
+    {
+        $this->assertSame($attendu, (new ConflitService())->nomNettoye($entree));
+    }
+
+    public static function nomsDeConflit(): array
+    {
+        return [
+            ['Perceuse (conflit — Bob)', 'Perceuse'],
+            ['Perceuse (conflit)', 'Perceuse'],
+            ['Perceuse', 'Perceuse'],                    // pas de suffixe → inchangé
+            ['Boîte (rangement) (conflit — Alice)', 'Boîte (rangement)'], // ne retire que le suffixe final
+        ];
+    }
+
+    /**
+     * Invariant sync : tout item/maison seedé doit porter un uuid + une version.
+     * Garde-fou contre WithoutModelEvents (qui muterait les hooks `creating` et
+     * sèmerait des lignes à uuid NULL → conflits non rattachables).
+     */
+    public function test_le_seeder_genere_uuid_et_version(): void
+    {
+        $this->seed(\Database\Seeders\DemoSeeder::class);
+
+        $this->assertSame(0, Item::whereNull('uuid')->count(), 'des items seedés sans uuid');
+        $this->assertSame(0, Item::whereNull('version')->count(), 'des items seedés sans version');
     }
 
     public function test_garder_reattache_les_enfants_de_l_original_au_doublon(): void
