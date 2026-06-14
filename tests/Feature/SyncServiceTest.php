@@ -4,8 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\House;
 use App\Models\Item;
+use App\Services\ImageService;
 use App\Services\SyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -83,9 +85,15 @@ class SyncServiceTest extends TestCase
         $this->assertSame('Après', $item->fresh()->name);
     }
 
-    public function test_update_version_perimee_est_un_conflit(): void
+    public function test_update_version_perimee_materialise_un_doublon(): void
     {
-        $item = Item::factory()->create(['name' => 'Officiel', 'version' => 3]);
+        $parent = Item::factory()->create(['is_container' => true]);
+        $item = Item::factory()->create([
+            'name'      => 'Officiel',
+            'version'   => 3,
+            'house_id'  => $parent->house_id,
+            'parent_id' => $parent->id,
+        ]);
 
         $r = $this->sync->appliquerOperation($this->op([
             'uuid'         => $item->uuid,
@@ -95,22 +103,95 @@ class SyncServiceTest extends TestCase
 
         $this->assertSame(SyncService::CONFLIT, $r['statut']);
         $this->assertSame('update-vs-update', $r['raison']);
+
         // l'objet officiel n'est pas écrasé
         $this->assertSame('Officiel', $item->fresh()->name);
+
+        // un doublon marqué conflit est créé, au même emplacement, suffixé
+        $doublon = Item::find($r['doublon']['id']);
+        $this->assertNotNull($doublon);
+        $this->assertNotSame($item->id, $doublon->id);
+        $this->assertTrue($doublon->en_conflit);
+        $this->assertSame($item->uuid, $doublon->conflit_de);
+        $this->assertStringContainsString('(conflit', $doublon->name);
+        $this->assertSame($item->parent_id, $doublon->parent_id);
+        $this->assertSame($item->house_id, $doublon->house_id);
+        $this->assertSame(1, $doublon->version);
     }
 
-    public function test_update_d_un_objet_supprime_est_un_conflit(): void
+    public function test_doublon_de_conflit_porte_le_nom_de_l_auteur(): void
     {
+        $item = Item::factory()->create(['version' => 3]);
+
+        $r = (new SyncService())->pour('Alice')->appliquerOperation($this->op([
+            'uuid'         => $item->uuid,
+            'base_version' => 1,
+            'payload'      => ['name' => 'Local'],
+        ]));
+
+        $doublon = Item::find($r['doublon']['id']);
+        $this->assertStringContainsString('(conflit — Alice)', $doublon->name);
+    }
+
+    public function test_update_d_un_objet_supprime_recree_a_la_racine(): void
+    {
+        $house = House::factory()->create();
         $uuid = (string) Str::uuid();
 
         $r = $this->sync->appliquerOperation($this->op([
-            'uuid'         => $uuid, // n'existe pas
+            'uuid'         => $uuid, // l'objet a été supprimé entretemps
             'base_version' => 1,
-            'payload'      => ['name' => 'X'],
+            'payload'      => ['name' => 'Édité', 'house_id' => $house->id, 'parent_id' => 9999],
         ]));
 
         $this->assertSame(SyncService::CONFLIT, $r['statut']);
         $this->assertSame('update-vs-delete', $r['raison']);
+
+        // l'intention locale est matérialisée, rattachée à la racine (parent disparu)
+        $doublon = Item::find($r['doublon']['id']);
+        $this->assertNotNull($doublon);
+        $this->assertTrue($doublon->en_conflit);
+        $this->assertNull($doublon->parent_id);
+        $this->assertSame($house->id, $doublon->house_id);
+    }
+
+    public function test_doublon_de_conflit_recoit_les_tags_du_payload(): void
+    {
+        $item = Item::factory()->create(['version' => 3]);
+
+        $r = $this->sync->appliquerOperation($this->op([
+            'uuid'         => $item->uuid,
+            'base_version' => 1,
+            'payload'      => ['name' => 'Local', 'tags' => ['Outils', 'urgent']],
+        ]));
+
+        $doublon = Item::find($r['doublon']['id']);
+        $this->assertEqualsCanonicalizing(
+            ['outils', 'urgent'], // normalisés en minuscule
+            $doublon->tags()->pluck('name')->all()
+        );
+    }
+
+    public function test_doublon_de_conflit_copie_le_fichier_image(): void
+    {
+        Storage::fake('public');
+        $fichier = ImageService::DOSSIER . '/original.jpg';
+        Storage::disk('public')->put($fichier, 'donnees-jpeg');
+
+        $item = Item::factory()->create(['version' => 3, 'image_filename' => 'original.jpg']);
+
+        $r = $this->sync->appliquerOperation($this->op([
+            'uuid'         => $item->uuid,
+            'base_version' => 1,
+            'payload'      => ['name' => 'Local', 'image_filename' => 'original.jpg'],
+        ]));
+
+        $doublon = Item::find($r['doublon']['id']);
+        // le doublon a son propre fichier (nom différent), tous deux présents
+        $this->assertNotNull($doublon->image_filename);
+        $this->assertNotSame('original.jpg', $doublon->image_filename);
+        Storage::disk('public')->assertExists(ImageService::DOSSIER . '/' . $doublon->image_filename);
+        Storage::disk('public')->assertExists($fichier);
     }
 
     public function test_delete_version_concordante_supprime(): void

@@ -29,7 +29,9 @@ class SyncController extends Controller
             'operations.*.payload'       => ['nullable', 'array'],
         ]);
 
-        $resultats = $this->sync->push($valide['operations']);
+        $resultats = $this->sync
+            ->pour($request->user()?->name)
+            ->push($valide['operations']);
 
         return response()->json(['resultats' => $resultats]);
     }

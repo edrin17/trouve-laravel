@@ -45,6 +45,27 @@ class ImageService
         return $filename;
     }
 
+    /**
+     * Copie un fichier image existant sous un nouveau nom, retourne ce nom.
+     * No-op (null) si l'original est null/absent. Utilisé pour les doublons de
+     * conflit, qui doivent posséder leur propre fichier (suppression indépendante).
+     */
+    public function dupliquer(?string $filename): ?string
+    {
+        if (!$filename) {
+            return null;
+        }
+        $source = self::DOSSIER . '/' . $filename;
+        if (!Storage::disk(self::DISQUE)->exists($source)) {
+            return null;
+        }
+
+        $copie = Str::uuid()->toString() . '.jpg';
+        Storage::disk(self::DISQUE)->copy($source, self::DOSSIER . '/' . $copie);
+
+        return $copie;
+    }
+
     /** Supprime le fichier image s'il existe (no-op si null/absent). */
     public function supprimer(?string $filename): void
     {
