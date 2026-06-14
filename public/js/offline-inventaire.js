@@ -173,7 +173,7 @@
     }
 
     function charger() {
-        fetch('/sync/pull', { credentials: 'same-origin' })
+        return fetch('/sync/pull', { credentials: 'same-origin' })
             .then(function (r) {
                 if (!r || !r.ok) {
                     throw new Error('indisponible');
@@ -182,12 +182,26 @@
             })
             .then(afficherDonnees)
             .catch(function () {
-                // Pas de réseau ET rien (d'exploitable) en cache.
+                // Pas de réseau (ou réponse inexploitable) ET rien en cache.
                 afficherVide();
             });
     }
 
-    // Au retour du réseau, on retente le chargement si on était à vide.
+    // Repli robuste : tant qu'on n'a PAS de données, on retente périodiquement.
+    // On ne se fie pas seulement à l'event `online` ni à navigator.onLine, peu
+    // fiables selon les navigateurs (cf. Firefox : onLine=false mais fetch OK).
+    // Dès qu'un essai réussit (réseau revenu ou cache à nouveau peuplé), la page
+    // se remplit et on arrête de retenter.
+    var REESSAI_MS = 10000;
+    var minuterie = setInterval(function () {
+        if (donnees) {
+            clearInterval(minuterie);
+            return;
+        }
+        charger();
+    }, REESSAI_MS);
+
+    // Coup de pouce immédiat au retour explicite du réseau (quand l'event existe).
     window.addEventListener('online', function () {
         if (!donnees) {
             charger();

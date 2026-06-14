@@ -49,7 +49,11 @@ class PwaTest extends TestCase
         // réchauffe le cache tant qu'on est en ligne
         $this->assertFileExists(public_path('js/offline-cache.js'));
         // rend l'inventaire en lecture seule à partir du snapshot caché
-        $this->assertFileExists(public_path('js/offline-inventaire.js'));
+        $chemin = public_path('js/offline-inventaire.js');
+        $this->assertFileExists($chemin);
+        // repli robuste : re-essai périodique tant qu'on est à vide (ne pas
+        // dépendre seulement de l'event online / navigator.onLine, peu fiables)
+        $this->assertStringContainsString('setInterval', file_get_contents($chemin));
     }
 
     public function test_les_icones_existent(): void

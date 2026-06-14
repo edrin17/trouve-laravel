@@ -2,7 +2,7 @@
 // de l'inventaire (réponse de /sync/pull) pour la consultation HORS-LIGNE en
 // lecture seule. Les mutations restent en ligne (Livewire exige le réseau).
 // Incrémenter CACHE à chaque modification pour purger l'ancien cache.
-const CACHE = 'trouve-v2';
+const CACHE = 'trouve-v3';
 
 // Endpoint dont la réponse JSON est cachée pour la consultation hors-ligne.
 const SNAPSHOT = '/sync/pull';
