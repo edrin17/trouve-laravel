@@ -294,7 +294,7 @@ new class extends Component
             <span style="font-weight:600;color:#8a5a00;">⚠️ {{ $this->nbConflits }} conflit(s) à résoudre</span>
             <button type="button" wire:click="basculerFiltreConflits"
                     style="margin-left:auto;border:1px solid #f0a30a;background:{{ $filtreConflits ? '#f0a30a' : '#fff' }};color:{{ $filtreConflits ? '#fff' : '#8a5a00' }};border-radius:6px;padding:.2rem .6rem;cursor:pointer;font-size:.85rem;">
-                {{ $filtreConflits ? '↩ Voir tout l\'inventaire' : '🔎 Ne voir que les conflits' }}
+                {{ $filtreConflits ? '↩ Retour à l\'inventaire' : '🛠 Résoudre les conflits' }}
             </button>
         </div>
     @endif
@@ -436,7 +436,6 @@ new class extends Component
 
     <livewire:inventory.house-form />
     <livewire:inventory.item-form />
-    <livewire:inventory.item-move />
     <livewire:inventory.item-tag-bulk />
     <livewire:inventory.tag-manager />
 </div>

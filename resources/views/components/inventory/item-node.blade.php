@@ -1,13 +1,16 @@
 @props(['item', 'modeSelection' => false])
 
 @php($aEnfants = $item->descendants->isNotEmpty())
+{{-- Verrou : pas de drag & drop ni d'actions sur un item en conflit (on passe
+     par la page « Résoudre les conflits ») ni en mode sélection multiple. --}}
+@php($verrou = $modeSelection || $item->en_conflit)
 
 <li style="margin:.15rem 0;" x-data="{ ouvert: true, survol: false }"
     @expand-all.window="ouvert = true"
     @collapse-all.window="ouvert = false">
     <div wire:key="item-{{ $item->id }}"
-         draggable="{{ $modeSelection ? 'false' : 'true' }}"
-         @unless ($modeSelection)
+         draggable="{{ $verrou ? 'false' : 'true' }}"
+         @unless ($verrou)
              @dragstart="draggedId = {{ $item->id }}; $event.dataTransfer.effectAllowed = 'move'"
              @dragend="draggedId = null"
              @if ($item->is_container)
@@ -17,9 +20,10 @@
              @endif
          @endunless
          @php($bordureBase = $item->en_conflit ? '#f0a30a' : '#e8e8e8')
+         @php($curseur = $verrou ? 'default' : 'grab')
          :style="survol
-            ? 'padding:.3rem .5rem;background:#e8f0fe;border:1px solid #3584e4;border-radius:6px;display:flex;align-items:center;gap:.4rem;cursor:grab;'
-            : 'padding:.3rem .5rem;background:{{ $item->en_conflit ? '#fff8ec' : '#fff' }};border:1px solid {{ $bordureBase }};{{ $item->en_conflit ? 'border-left:4px solid #f0a30a;' : '' }}border-radius:6px;display:flex;align-items:center;gap:.4rem;cursor:grab;'">
+            ? 'padding:.3rem .5rem;background:#e8f0fe;border:1px solid #3584e4;border-radius:6px;display:flex;align-items:center;gap:.4rem;cursor:{{ $curseur }};'
+            : 'padding:.3rem .5rem;background:{{ $item->en_conflit ? '#fff8ec' : '#fff' }};border:1px solid {{ $bordureBase }};{{ $item->en_conflit ? 'border-left:4px solid #f0a30a;' : '' }}border-radius:6px;display:flex;align-items:center;gap:.4rem;cursor:{{ $curseur }};'">
         @if ($modeSelection)
             <input type="checkbox" wire:model.live="selection" value="{{ $item->id }}"
                    title="Sélectionner cet objet"
@@ -52,23 +56,24 @@
             <span style="background:#e8f0fe;color:#1a73e8;border-radius:10px;padding:0 .5rem;font-size:.75rem;">{{ $tag->name }}</span>
         @endforeach
 
-        <span style="margin-left:auto;display:flex;gap:.25rem;{{ $modeSelection ? 'visibility:hidden;' : '' }}">
-            @if ($item->is_container)
-                <button type="button" title="Ajouter un objet ici"
-                        wire:click="$dispatch('item-creer', { houseId: {{ $item->house_id }}, parentId: {{ $item->id }} })"
-                        style="border:none;background:transparent;cursor:pointer;font-size:.9rem;">➕</button>
-            @endif
-            <button type="button" title="Modifier"
-                    wire:click="$dispatch('item-editer', { itemId: {{ $item->id }} })"
-                    style="border:none;background:transparent;cursor:pointer;font-size:.9rem;">✏️</button>
-            <button type="button" title="Déplacer"
-                    wire:click="$dispatch('item-deplacer', { itemId: {{ $item->id }} })"
-                    style="border:none;background:transparent;cursor:pointer;font-size:.9rem;">↪️</button>
-            <button type="button" title="Supprimer"
-                    wire:click="supprimer({{ $item->id }})"
-                    wire:confirm="Supprimer « {{ $item->name }} » et tout son contenu ?"
-                    style="border:none;background:transparent;cursor:pointer;font-size:.9rem;">🗑️</button>
-        </span>
+        {{-- Actions masquées sur un item en conflit (résolution via la page dédiée)
+             et neutralisées en mode sélection (layout stable via visibility). --}}
+        @unless ($item->en_conflit)
+            <span style="margin-left:auto;display:flex;gap:.25rem;{{ $modeSelection ? 'visibility:hidden;' : '' }}">
+                @if ($item->is_container)
+                    <button type="button" title="Ajouter un objet ici"
+                            wire:click="$dispatch('item-creer', { houseId: {{ $item->house_id }}, parentId: {{ $item->id }} })"
+                            style="border:none;background:transparent;cursor:pointer;font-size:.9rem;">➕</button>
+                @endif
+                <button type="button" title="Modifier"
+                        wire:click="$dispatch('item-editer', { itemId: {{ $item->id }} })"
+                        style="border:none;background:transparent;cursor:pointer;font-size:.9rem;">✏️</button>
+                <button type="button" title="Supprimer"
+                        wire:click="supprimer({{ $item->id }})"
+                        wire:confirm="Supprimer « {{ $item->name }} » et tout son contenu ?"
+                        style="border:none;background:transparent;cursor:pointer;font-size:.9rem;">🗑️</button>
+            </span>
+        @endunless
     </div>
 
     @if ($aEnfants)

@@ -172,6 +172,27 @@ class ConflitTest extends TestCase
             ->assertSeeHtml('conflit(s) à résoudre');
     }
 
+    public function test_un_item_en_conflit_n_a_pas_d_actions_ni_de_drag_dans_l_arbre(): void
+    {
+        // doublon racine (visible dans l'arbre) pour inspecter son rendu de nœud
+        $doublon = Item::factory()->create([
+            'name' => 'Objet litigieux', 'parent_id' => null,
+            'en_conflit' => true, 'conflit_de' => (string) \Illuminate\Support\Str::uuid(),
+        ]);
+        $normal = Item::factory()->create(['name' => 'Objet normal', 'parent_id' => null]);
+
+        $html = Livewire::test(self::TREE)->html();
+
+        // l'item en conflit n'est pas déplaçable, l'item normal l'est
+        $this->assertStringContainsString('wire:key="item-' . $normal->id . '"', $html);
+        // pas de bouton supprimer (wire:click supprimer) ciblant le doublon
+        $this->assertStringNotContainsString('supprimer(' . $doublon->id . ')', $html);
+        // ni d'édition du doublon depuis l'arbre
+        $this->assertStringNotContainsString('itemId: ' . $doublon->id . ' })', $html);
+        // l'item normal garde bien son action de suppression
+        $this->assertStringContainsString('supprimer(' . $normal->id . ')', $html);
+    }
+
     public function test_tree_garder_conflit_resout_et_sort_du_filtre(): void
     {
         [$original, $doublon] = $this->couple();
